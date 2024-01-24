@@ -1,0 +1,17 @@
+[package]
+name = "slice_math"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+moddef = "0.2.2"
+slice_ops = {version = "0.1.4", features = ["std"]}
+num = "0.4.1"
+
+[dev-dependencies]
+plotters = "0.3.5"
+linspace = "0.1.1"
+array__ops = "0.1.7"
+rustfft = "6.2.0"
