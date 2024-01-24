@@ -11,6 +11,8 @@ moddef::moddef!(
     }
 );
 
+pub use slice_ops::*;
+
 #[cfg(test)]
 mod tests {
     use std::{ops::RangeBounds, time::{Duration, SystemTime}};
