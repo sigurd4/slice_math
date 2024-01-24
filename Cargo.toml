@@ -11,11 +11,11 @@ keywords = ["slice", "util", "math", "ops"]
 
 [dependencies]
 moddef = "0.2.2"
-slice_ops = {version = "0.1.4", features = ["std"]}
+slice_ops = {version = "0.1.5", features = ["std"]}
 num = "0.4.1"
 
 [dev-dependencies]
 plotters = "0.3.5"
 linspace = "0.1.1"
-array__ops = "0.1.7"
+array__ops = "0.1.8"
 rustfft = "6.2.0"
