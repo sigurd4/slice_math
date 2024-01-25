@@ -5,9 +5,6 @@
 moddef::moddef!(
     flat(pub) mod {
         slice_math_
-    },
-    mod {
-        plot for cfg(test)
     }
 );
 
@@ -17,10 +14,10 @@ pub use slice_ops::*;
 mod tests {
     use std::{ops::RangeBounds, time::{Duration, SystemTime}};
 
-    use array__ops::{Array2dOps, ArrayNd, ArrayOps};
-    use linspace::{Linspace, LinspaceArray};
+    //use array__ops::{Array2dOps, ArrayNd, ArrayOps};
+    //use linspace::{Linspace, LinspaceArray};
     use num::Complex;
-    use rustfft::{Fft, FftPlanner};
+    //use rustfft::{Fft, FftPlanner};
 
     use super::*;
 
@@ -38,7 +35,7 @@ mod tests {
         t0.elapsed().unwrap()
     }
 
-    #[test]
+    /*#[test]
     fn bench()
     {
         let fn_name = "FFT";
@@ -83,5 +80,5 @@ mod tests {
         let n = <[f32; N]>::fill_boxed(|n| (1 << n) as f32);
 
         plot::plot_curves(plot_title, plot_path, [&*n; M], t.each_ref2().map(|t| &**t)).expect("Plot error")
-    }
+    }*/
 }
