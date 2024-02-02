@@ -1,4 +1,4 @@
-use std::{f64::consts::TAU, ops::{AddAssign, Mul, MulAssign}};
+use std::{f64::consts::TAU, iter::Sum, ops::{AddAssign, Mul, MulAssign}};
 
 use num::{complex::ComplexFloat, traits::{Inv, SaturatingSub}, Complex, Float, NumCast, One, Saturating, Zero};
 use slice_ops::{Slice, SliceOps};
@@ -27,6 +27,8 @@ pub trait SliceMath<T>: SliceOps<T>
     /// Convolution can be done directly `O(n^2)` or using FFT `O(nlog(n))`.
     /// 
     /// ```rust
+    /// #![feature(generic_const_exprs)]
+    /// 
     /// use slice_math::*;
     /// 
     /// let x = [1.0, 0.0, 1.5, 0.0, 0.0, -1.0];
@@ -50,12 +52,18 @@ pub trait SliceMath<T>: SliceOps<T>
         <Complex<T> as Mul<Complex<Rhs>>>::Output: ComplexFloat<Real: Float> + Into<Complex<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>>,
         Complex<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>: MulAssign + AddAssign + ComplexFloat<Real = <<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>,
         C: FromIterator<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>;
+        
+    fn fft_unscaled<const I: bool>(&mut self)
+    where
+        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<<T>::Real>> + Sum;
     
     /// Performs an iterative, in-place radix-2 FFT algorithm as described in https://en.wikipedia.org/wiki/Cooley%E2%80%93Tukey_FFT_algorithm#Data_reordering,_bit_reversal,_and_in-place_algorithms.
     /// If length is not a power of two, it uses the DFT, which is a lot slower.
     /// 
     /// # Examples
     /// ```rust
+    /// #![feature(generic_const_exprs)]
+    /// 
     /// use num::Complex;
     /// use slice_math::*;
     /// 
@@ -75,13 +83,15 @@ pub trait SliceMath<T>: SliceOps<T>
     /// ```
     fn fft(&mut self)
     where
-        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<T::Real>>;
+        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<T::Real>> + Sum;
         
     /// Performs an iterative, in-place radix-2 IFFT algorithm as described in https://en.wikipedia.org/wiki/Cooley%E2%80%93Tukey_FFT_algorithm#Data_reordering,_bit_reversal,_and_in-place_algorithms.
     /// If length is not a power of two, it uses the IDFT, which is a lot slower.
     /// 
     /// # Examples
     /// ```rust
+    /// #![feature(generic_const_exprs)]
+    /// 
     /// use num::Complex;
     /// use slice_math::*;
     /// 
@@ -101,7 +111,7 @@ pub trait SliceMath<T>: SliceOps<T>
     /// ```
     fn ifft(&mut self)
     where
-        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<T::Real>>;
+        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<T::Real>> + Sum;
         
     fn real_fft(&self, y: &mut [Complex<T>])
     where
@@ -202,24 +212,59 @@ impl<T> SliceMath<T> for [T]
             .collect()
     }
 
+    fn fft_unscaled<const I: bool>(&mut self)
+    where
+        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<<T>::Real>> + Sum
+    {
+        if self.len() <= 1
+        {
+            return;
+        }
+        if !(
+            fft::fft_radix2_unscaled::<_, I>(self)
+            || fft::fft_radix3_unscaled::<_, I>(self)
+            || fft::fft_radix_p_unscaled::<_, 5, I>(self)
+            || fft::fft_radix_p_unscaled::<_, 7, I>(self)
+            || fft::fft_radix_p_unscaled::<_, 11, I>(self)
+            || fft::fft_radix_p_unscaled::<_, 13, I>(self)
+            || fft::fft_radix_p_unscaled::<_, 17, I>(self)
+            || fft::fft_radix_p_unscaled::<_, 19, I>(self)
+            || fft::fft_radix_p_unscaled::<_, 23, I>(self)
+            || fft::fft_radix_p_unscaled::<_, 29, I>(self)
+            || fft::fft_radix_p_unscaled::<_, 31, I>(self)
+            || fft::fft_radix_p_unscaled::<_, 37, I>(self)
+            || fft::fft_radix_p_unscaled::<_, 41, I>(self)
+            || fft::fft_radix_p_unscaled::<_, 43, I>(self)
+            || fft::fft_radix_p_unscaled::<_, 47, I>(self)
+            || fft::fft_radix_p_unscaled::<_, 53, I>(self)
+            || fft::fft_radix_p_unscaled::<_, 59, I>(self)
+            || fft::fft_radix_p_unscaled::<_, 61, I>(self)
+            || fft::fft_radix_p_unscaled::<_, 67, I>(self)
+            || fft::fft_radix_p_unscaled::<_, 71, I>(self)
+            || fft::fft_radix_p_unscaled::<_, 73, I>(self)
+            || fft::fft_radix_p_unscaled::<_, 79, I>(self)
+            || fft::fft_radix_p_unscaled::<_, 83, I>(self)
+            || fft::fft_radix_p_unscaled::<_, 89, I>(self)
+            || fft::fft_radix_p_unscaled::<_, 97, I>(self)
+            || fft::fft_radix_n_sqrt_unscaled::<_, I>(self)
+        )
+        {
+            fft::dft_unscaled::<_, I>(self)
+        }
+    }
+
     fn fft(&mut self)
     where
-        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<<T>::Real>>
+        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<<T>::Real>> + Sum
     {
-        if !fft::fft_radix2_unscaled::<_, false>(self)
-        {
-            fft::dft_unscaled::<_, false>(self)
-        }
+        self.fft_unscaled::<false>()
     }
 
     fn ifft(&mut self)
     where
-        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<<T>::Real>>
+        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<<T>::Real>> + Sum
     {
-        if !fft::fft_radix2_unscaled::<_, true>(self)
-        {
-            fft::dft_unscaled::<_, true>(self)
-        }
+        self.fft_unscaled::<true>();
 
         self.mul_assign_all(<T as From<_>>::from(<Complex<_> as From<_>>::from(<T::Real as NumCast>::from(1.0/self.len() as f64).unwrap())));
     }
