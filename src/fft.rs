@@ -5,7 +5,7 @@ use num::{complex::ComplexFloat, Complex, Float, NumCast};
 
 pub fn fft_radix2_unscaled<T, const I: bool>(slice: &mut [T]) -> bool
 where
-    T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<T::Real>>
+    T: ComplexFloat<Real: Float> + MulAssign + From<Complex<T::Real>>
 {
     let len = slice.len();
     if len.is_power_of_two()
