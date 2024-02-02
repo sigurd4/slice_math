@@ -5,6 +5,9 @@
 moddef::moddef!(
     flat(pub) mod {
         slice_math_
+    },
+    mod {
+        fft
     }
 );
 

@@ -3,6 +3,8 @@ use std::{f64::consts::TAU, ops::{AddAssign, Mul, MulAssign}};
 use num::{complex::ComplexFloat, traits::{Inv, SaturatingSub}, Complex, Float, NumCast, One, Saturating, Zero};
 use slice_ops::{Slice, SliceOps};
 
+use crate::fft;
+
 pub trait SliceMath<T>: SliceOps<T>
 {
     fn recip_assign_all(&mut self)
@@ -204,54 +206,9 @@ impl<T> SliceMath<T> for [T]
     where
         T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<<T>::Real>>
     {
-        let len = self.len();
-        
-        if len.is_power_of_two()
+        if !fft::fft_radix2_unscaled::<_, false>(self)
         {
-            // Radix 2 FFT
-
-            self.bit_reverse_permutation();
-            
-            for s in 0..len.ilog2()
-            {
-                let m = 2usize << s;
-                let wm = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(-TAU/m as f64).unwrap()));
-                for k in (0..len).step_by(m)
-                {
-                    let mut w = T::one();
-                    for j in 0..m/2
-                    {
-                        let t = w*self[k + j + m/2];
-                        let u = self[k + j];
-                        self[k + j] = u + t;
-                        self[k + j + m/2] = u - t;
-                        w *= wm;
-                    }
-                }
-            }
-        }
-        else
-        {
-            // DFT
-
-            let wn = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(-TAU/len as f64).unwrap()));
-            let mut wnk = T::one();
-
-            let mut buf = vec![T::zero(); len];
-            unsafe {
-                std::ptr::swap_nonoverlapping(buf.as_mut_ptr(), self.as_mut_ptr(), len);
-            }
-            for k in 0..len
-            {
-                let mut wnki = T::one();
-                for i in 0..len
-                {
-                    self[k] += buf[i]*wnki;
-                    wnki *= wnk;
-                }
-
-                wnk *= wn;
-            }
+            fft::dft_unscaled::<_, false>(self)
         }
     }
 
@@ -259,57 +216,12 @@ impl<T> SliceMath<T> for [T]
     where
         T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<<T>::Real>>
     {
-        let len = self.len();
-
-        if len.is_power_of_two()
+        if !fft::fft_radix2_unscaled::<_, true>(self)
         {
-            // Radix 2 IFFT
-
-            self.bit_reverse_permutation();
-            
-            for s in 0..len.ilog2()
-            {
-                let m = 2usize << s;
-                let wm = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(TAU/m as f64).unwrap()));
-                for k in (0..len).step_by(m)
-                {
-                    let mut w = T::one();
-                    for j in 0..m/2
-                    {
-                        let t = w*self[k + j + m/2];
-                        let u = self[k + j];
-                        self[k + j] = u + t;
-                        self[k + j + m/2] = u - t;
-                        w *= wm;
-                    }
-                }
-            }
-        }
-        else
-        {
-            // IDFT
-
-            let wn = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(TAU/len as f64).unwrap()));
-            let mut wnk = T::one();
-
-            let mut buf = vec![T::zero(); len];
-            unsafe {
-                std::ptr::swap_nonoverlapping(buf.as_mut_ptr(), self.as_mut_ptr(), len);
-            }
-            for k in 0..len
-            {
-                let mut wnki = T::one();
-                for i in 0..len
-                {
-                    self[k] += buf[i]*wnki;
-                    wnki *= wnk;
-                }
-
-                wnk *= wn;
-            }
+            fft::dft_unscaled::<_, true>(self)
         }
 
-        self.mul_assign_all(<T as From<_>>::from(<Complex<_> as From<_>>::from(<T::Real as NumCast>::from(1.0/len as f64).unwrap())));
+        self.mul_assign_all(<T as From<_>>::from(<Complex<_> as From<_>>::from(<T::Real as NumCast>::from(1.0/self.len() as f64).unwrap())));
     }
     
     fn real_fft(&self, y: &mut [Complex<T>])
