@@ -34,7 +34,7 @@ pub trait SliceMath<T>: SliceOps<T>
     /// let x = [1.0, 0.0, 1.5, 0.0, 0.0, -1.0];
     /// let h = [1.0, 0.6, 0.3];
     /// 
-    /// let y_fft: Vec<f64> = x.convolve_fft(&h);
+    /// let y_fft: Vec<f64> = x.convolve_real_fft(&h);
     /// let y_direct: Vec<f64> = x.convolve_direct(&h);
     /// 
     /// let avg_error = y_fft.into_iter()
@@ -43,7 +43,7 @@ pub trait SliceMath<T>: SliceOps<T>
     ///     .sum::<f64>()/x.len() as f64;
     /// assert!(avg_error < 1.0e-15);
     /// ```
-    fn convolve_fft<Rhs, C>(&self, rhs: &[Rhs]) -> C
+    fn convolve_real_fft<Rhs, C>(&self, rhs: &[Rhs]) -> C
     where
         T: Float + Copy,
         Rhs: Float + Copy,
@@ -53,6 +53,23 @@ pub trait SliceMath<T>: SliceOps<T>
         Complex<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>: MulAssign + AddAssign + ComplexFloat<Real = <<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>,
         C: FromIterator<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>;
         
+    fn convolve_fft<Rhs, C>(&self, rhs: &[Rhs]) -> C
+    where
+        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<T::Real>> + Sum + Mul<Rhs>,
+        Rhs: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<Rhs::Real>> + Sum,
+        <T as Mul<Rhs>>::Output: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real>> + Sum,
+        C: FromIterator<<T as Mul<Rhs>>::Output>;
+        
+    fn dtft(&self, omega: T::Real) -> T
+    where
+        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<T::Real>> + Sum;
+        
+    fn real_dtft(&self, omega: T) -> Complex<T>
+    where
+        T: Float,
+        Complex<T>: ComplexFloat<Real = T> + MulAssign + AddAssign;
+        
+    #[doc(hidden)]
     fn fft_unscaled<const I: bool>(&mut self)
     where
         T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<<T>::Real>> + Sum;
@@ -173,7 +190,7 @@ impl<T> SliceMath<T> for [T]
         }).collect()
     }
 
-    fn convolve_fft<Rhs, C>(&self, rhs: &[Rhs]) -> C
+    fn convolve_real_fft<Rhs, C>(&self, rhs: &[Rhs]) -> C
     where
         T: Float + Copy,
         Rhs: Float + Copy,
@@ -188,13 +205,11 @@ impl<T> SliceMath<T> for [T]
 
         let mut x: Vec<T> = self.to_vec();
         let mut h: Vec<Rhs> = rhs.to_vec();
-        
         x.resize(len, T::zero());
         h.resize(len, Rhs::zero());
 
         let mut x_f = vec![Complex::zero(); len/2 + 1];
         let mut h_f = vec![Complex::zero(); len/2 + 1];
-
         x.real_fft(&mut x_f);
         h.real_fft(&mut h_f);
 
@@ -210,6 +225,66 @@ impl<T> SliceMath<T> for [T]
         
         y.into_iter()
             .collect()
+    }
+    
+    fn convolve_fft<Rhs, C>(&self, rhs: &[Rhs]) -> C
+    where
+        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<T::Real>> + Sum + Mul<Rhs>,
+        Rhs: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<Rhs::Real>> + Sum,
+        <T as Mul<Rhs>>::Output: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real>> + Sum,
+        C: FromIterator<<T as Mul<Rhs>>::Output>
+    {
+        let y_len = (self.len() + rhs.len()).saturating_sub(1);
+        let len = y_len.next_power_of_two();
+
+        let mut x: Vec<T> = self.to_vec();
+        let mut h: Vec<Rhs> = rhs.to_vec();
+        x.resize(len, T::zero());
+        h.resize(len, Rhs::zero());
+        x.fft();
+        h.fft();
+
+        let mut y: Vec<_> = x.into_iter()
+            .zip(h.into_iter())
+            .map(|(x, h)| x*h)
+            .collect();
+        y.ifft();
+
+        y.truncate(y_len);
+        
+        y.into_iter()
+            .collect()
+    }
+    
+    fn dtft(&self, omega: T::Real) -> T
+    where
+        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<T::Real>> + Sum
+    {
+        let mut y = T::zero();
+        let z1 = <T as From<_>>::from(Complex::cis(-omega));
+        let mut z = T::one();
+        for &x in self
+        {
+            y += x*z;
+            z *= z1;
+        }
+        y
+    }
+        
+    fn real_dtft(&self, omega: T) -> Complex<T>
+    where
+        T: Float,
+        Complex<T>: ComplexFloat<Real = T> + MulAssign + AddAssign
+    {
+        let mut y = Complex::zero();
+        let z1 = Complex::cis(-omega);
+        let mut z = Complex::one();
+        for &x in self
+        {
+            y += <Complex<_> as From<_>>::from(x)*z;
+            z *= z1;
+        }
+        y
     }
 
     fn fft_unscaled<const I: bool>(&mut self)

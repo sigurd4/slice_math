@@ -40,6 +40,8 @@ where
     let len = slice.len();
     if len.is_power_of_two()
     {
+        // In-place FFT
+
         slice.bit_reverse_permutation();
         
         for s in 0..len.ilog2()
