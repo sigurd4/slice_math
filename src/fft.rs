@@ -38,7 +38,7 @@ where
     T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<T::Real>> + Sum
 {
     let len = slice.len();
-    if len.is_power_of_two()
+    if false && len.is_power_of_two()
     {
         // In-place FFT
 
