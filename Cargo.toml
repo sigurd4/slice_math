@@ -11,7 +11,7 @@ keywords = ["slice", "util", "math", "ops"]
 
 [dependencies]
 moddef = "0.2.2"
-slice_ops = {version = "0.1.5", features = ["std"]}
+slice_ops = {version = "0.1.6", features = ["std"]}
 num = "0.4.1"
 
 [dev-dependencies]
