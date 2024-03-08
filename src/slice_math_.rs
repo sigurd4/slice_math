@@ -139,6 +139,25 @@ pub trait SliceMath<T>: SliceOps<T>
     where
         T: Float,
         Complex<T>: ComplexFloat<Real = T> + MulAssign + AddAssign;
+        
+    fn trim_zeros(&self) -> &[T]
+    where
+        T: Zero;
+    fn trim_zeros_front(&self) -> &[T]
+    where
+        T: Zero;
+    fn trim_zeros_back(&self) -> &[T]
+    where
+        T: Zero;
+    fn trim_zeros_mut(&mut self) -> &mut [T]
+    where
+        T: Zero;
+    fn trim_zeros_front_mut(&mut self) -> &mut [T]
+    where
+        T: Zero;
+    fn trim_zeros_back_mut(&mut self) -> &mut [T]
+    where
+        T: Zero;
 }
 
 impl<T> SliceMath<T> for [T]
@@ -399,6 +418,43 @@ impl<T> SliceMath<T> for [T]
         {
             *y = x.re();
         }
+    }
+    
+    fn trim_zeros(&self) -> &[T]
+    where
+        T: Zero
+    {
+        self.trim(Zero::is_zero)
+    }
+    fn trim_zeros_front(&self) -> &[T]
+    where
+        T: Zero
+    {
+        self.trim_front(Zero::is_zero)
+    }
+    fn trim_zeros_back(&self) -> &[T]
+    where
+        T: Zero
+    {
+        self.trim_back(Zero::is_zero)
+    }
+    fn trim_zeros_mut(&mut self) -> &mut [T]
+    where
+        T: Zero
+    {
+        self.trim_mut(Zero::is_zero)
+    }
+    fn trim_zeros_front_mut(&mut self) -> &mut [T]
+    where
+        T: Zero
+    {
+        self.trim_front_mut(Zero::is_zero)
+    }
+    fn trim_zeros_back_mut(&mut self) -> &mut [T]
+    where
+        T: Zero
+    {
+        self.trim_back_mut(Zero::is_zero)
     }
 }
 
