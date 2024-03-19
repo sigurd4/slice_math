@@ -1,9 +1,11 @@
-use std::{f64::consts::TAU, iter::Sum, ops::{AddAssign, Mul, MulAssign}};
+use std::{f64::consts::TAU, iter::Sum, ops::{AddAssign, Div, DivAssign, Mul, MulAssign, Neg, SubAssign}};
 
-use num::{complex::ComplexFloat, traits::{Inv, SaturatingSub}, Complex, Float, NumCast, One, Saturating, Zero};
-use slice_ops::{Slice, SliceOps};
+use num::{complex::ComplexFloat, traits::Inv, Complex, Float, NumCast, One, Zero};
+use slice_ops::SliceOps;
 
 use crate::fft;
+
+const NEWTON_POLYNOMIAL_ROOTS: usize = 16;
 
 pub trait SliceMath<T>: SliceOps<T>
 {
@@ -139,6 +141,57 @@ pub trait SliceMath<T>: SliceOps<T>
     where
         T: Float,
         Complex<T>: ComplexFloat<Real = T> + MulAssign + AddAssign;
+        
+    
+    fn polynomial<Rhs>(&self, rhs: Rhs) -> T
+    where
+        T: AddAssign + MulAssign<Rhs> + Zero + Copy,
+        Rhs: Copy;
+    fn rpolynomial<Rhs>(&self, rhs: Rhs) -> T
+    where
+        T: AddAssign + MulAssign<Rhs> + Zero + Copy,
+        Rhs: Copy;
+        
+    fn derivate_polynomial<S>(&self) -> S
+    where
+        T: NumCast + Zero + Mul + Copy,
+        S: FromIterator<<T as Mul>::Output>;
+    fn derivate_rpolynomial<S>(&self) -> S
+    where
+        T: NumCast + Zero + Mul + Copy,
+        S: FromIterator<<T as Mul>::Output>;
+        
+    fn integrate_polynomial<S>(&self, c: <T as Div>::Output) -> S
+    where
+        T: NumCast + Zero + Div + Copy,
+        S: FromIterator<<T as Div>::Output>;
+    fn integrate_rpolynomial<S>(&self, c: <T as Div>::Output) -> S
+    where
+        T: NumCast + Zero + Div + Copy,
+        S: FromIterator<<T as Div>::Output>;
+
+    #[cfg(feature = "ndarray")]
+    fn companion_matrix(&self) -> ndarray::Array2<<T as Neg>::Output>
+    where
+        T: Copy + Neg + Zero,
+        <T as Neg>::Output: One + Zero + DivAssign<T>;
+    #[cfg(feature = "ndarray")]
+    fn rcompanion_matrix(&self) -> ndarray::Array2<<T as Neg>::Output>
+    where
+        T: Copy + Neg + Zero,
+        <T as Neg>::Output: One + Zero + DivAssign<T>;
+    #[cfg(feature = "ndarray")]
+    fn polynomial_roots<S>(&self) -> S
+    where
+        Complex<<T as ComplexFloat>::Real>: From<T> + AddAssign + SubAssign + MulAssign + DivAssign + DivAssign<<T as ComplexFloat>::Real>,
+        T: ComplexFloat + ndarray_linalg::Lapack<Complex = Complex<<T as ComplexFloat>::Real>>,
+        S: FromIterator<Complex<<T as ComplexFloat>::Real>>;
+    #[cfg(feature = "ndarray")]
+    fn rpolynomial_roots<S>(&self) -> S
+    where
+        Complex<<T as ComplexFloat>::Real>: From<T> + AddAssign + SubAssign + MulAssign + DivAssign + DivAssign<<T as ComplexFloat>::Real>,
+        T: ComplexFloat + ndarray_linalg::Lapack<Complex = Complex<<T as ComplexFloat>::Real>>,
+        S: FromIterator<Complex<<T as ComplexFloat>::Real>>;
         
     fn trim_zeros(&self) -> &[T]
     where
@@ -420,6 +473,228 @@ impl<T> SliceMath<T> for [T]
         }
     }
     
+    fn polynomial<Rhs>(&self, rhs: Rhs) -> T
+    where
+        T: AddAssign + MulAssign<Rhs> + Zero + Copy,
+        Rhs: Copy
+    {
+        let mut y = T::zero();
+        let mut i = self.len();
+        while i > 0
+        {
+            i -= 1;
+            y *= rhs;
+            y += self[i];
+        }
+        y
+    }
+    fn rpolynomial<Rhs>(&self, rhs: Rhs) -> T
+    where
+        T: AddAssign + MulAssign<Rhs> + Zero + Copy,
+        Rhs: Copy
+    {
+        let n = self.len();
+        let mut y = T::zero();
+        let mut i = 0;
+        while i < n
+        {
+            y *= rhs;
+            y += self[i];
+            i += 1;
+        }
+        y
+    }
+    
+    fn derivate_polynomial<S>(&self) -> S
+    where
+        T: NumCast + Zero + Mul + Copy,
+        S: FromIterator<<T as Mul>::Output>
+    {
+        let s = self.trim_zeros_back();
+        if s.len() < 2
+        {
+            return core::iter::empty()
+                .collect()
+        }
+        s[1..].into_iter()
+            .enumerate()
+            .map(|(i, b)| *b*T::from(i + 1).unwrap())
+            .collect()
+    }
+    fn derivate_rpolynomial<S>(&self) -> S
+    where
+        T: NumCast + Zero + Mul + Copy,
+        S: FromIterator<<T as Mul>::Output>
+    {
+        let s = self.trim_zeros_front();
+        let n = s.len();
+        if n < 2
+        {
+            return core::iter::empty()
+                .collect()
+        }
+        let nm1 = n - 1;
+        s[..nm1].into_iter()
+            .enumerate()
+            .map(|(i, b)| *b*T::from(nm1 - i).unwrap())
+            .collect()
+    }
+        
+    fn integrate_polynomial<S>(&self, c: <T as Div>::Output) -> S
+    where
+        T: NumCast + Zero + Div + Copy,
+        S: FromIterator<<T as Div>::Output>
+    {
+        core::iter::once(c)
+            .chain(self.trim_zeros_back()
+                .into_iter()
+                .enumerate()
+                .map(|(i, b)| *b/T::from(i + 1).unwrap())
+            ).collect()
+    }
+    fn integrate_rpolynomial<S>(&self, c: <T as Div>::Output) -> S
+    where
+        T: NumCast + Zero + Div + Copy,
+        S: FromIterator<<T as Div>::Output>
+    {
+        let s = self.trim_zeros_front();
+        let n = s.len();
+        s.into_iter()
+            .enumerate()
+            .map(|(i, b)| *b/T::from(n - i).unwrap())
+            .chain(core::iter::once(c))
+            .collect()
+    }
+
+    #[cfg(feature = "ndarray")]
+    fn companion_matrix(&self) -> ndarray::Array2<<T as Neg>::Output>
+    where
+        T: Copy + Neg + Zero,
+        <T as Neg>::Output: One + Zero + DivAssign<T>
+    {
+        let s = self.trim_zeros_back();
+        let l = s.len();
+        if l < 1
+        {
+            return ndarray::Array2::from_shape_fn((0, 0), |_| Zero::zero())
+        }
+        let n = l - 1;
+        let mut c = ndarray::Array2::from_shape_fn((n, n), |_| Zero::zero());
+        let mut i = 0;
+        while i < n
+        {
+            if i > 0
+            {
+                c[(i, i - 1)] = One::one();
+            }
+            c[(i, n - 1)] = -s[i];
+            c[(i, n - 1)] /= s[n];
+            i += 1;
+        }
+        c
+    }
+    #[cfg(feature = "ndarray")]
+    fn rcompanion_matrix(&self) -> ndarray::Array2<<T as Neg>::Output>
+    where
+        T: Copy + Neg + Zero,
+        <T as Neg>::Output: One + Zero + DivAssign<T>
+    {
+        let s = self.trim_zeros_front();
+        let l = s.len();
+        if l < 1
+        {
+            return ndarray::Array2::from_shape_fn((0, 0), |_| Zero::zero())
+        }
+        let n = l - 1;
+        let mut c = ndarray::Array2::from_shape_fn((n, n), |_| Zero::zero());
+        let mut i = n;
+        loop
+        {
+            c[(n - i, n - 1)] = -s[i];
+            c[(n - i, n - 1)] /= s[0];
+            i -= 1;
+            if i > 0
+            {
+                c[(i, i - 1)] = One::one();
+            }
+            else
+            {
+                break
+            }
+        }
+        c
+    }
+    #[cfg(feature = "ndarray")]
+    fn polynomial_roots<S>(&self) -> S
+    where
+        Complex<<T as ComplexFloat>::Real>: From<T> + AddAssign + SubAssign + MulAssign + DivAssign + DivAssign<<T as ComplexFloat>::Real>,
+        T: ComplexFloat + ndarray_linalg::Lapack<Complex = Complex<<T as ComplexFloat>::Real>>,
+        S: FromIterator<Complex<<T as ComplexFloat>::Real>>
+    {
+        use ndarray_linalg::eig::EigVals;
+
+        let c = self.companion_matrix();
+        let mut roots = EigVals::eigvals(&c).unwrap();
+        let len = roots.len();
+        // Use newtons method
+        let p: Vec<Complex<<T as ComplexFloat>::Real>> = self.into_iter()
+            .map(|p| From::from(*p))
+            .collect();
+        let dp: Vec<_> = p.derivate_polynomial();
+        for k in 0..len
+        {
+            const NEWTON: usize = NEWTON_POLYNOMIAL_ROOTS;
+
+            for _ in 0..NEWTON
+            {
+                let root = roots[k];
+                let df = p.polynomial(root);
+                if df.is_zero()
+                {
+                    break
+                }
+                roots[k] -= df/dp.polynomial(root)
+            }
+        }
+        roots.into_iter()
+            .collect()
+    }
+    #[cfg(feature = "ndarray")]
+    fn rpolynomial_roots<S>(&self) -> S
+    where
+        Complex<<T as ComplexFloat>::Real>: From<T> + AddAssign + SubAssign + MulAssign + DivAssign + DivAssign<<T as ComplexFloat>::Real>,
+        T: ComplexFloat + ndarray_linalg::Lapack<Complex = Complex<<T as ComplexFloat>::Real>>,
+        S: FromIterator<Complex<<T as ComplexFloat>::Real>>
+    {
+        use ndarray_linalg::EigVals;
+
+        let c = self.rcompanion_matrix();
+        let mut roots = EigVals::eigvals(&c).unwrap();
+        let len = roots.len();
+        // Use newtons method
+        let p: Vec<Complex<<T as ComplexFloat>::Real>> = self.into_iter()
+            .map(|p| From::from(*p))
+            .collect();
+        let dp: Vec<_> = p.derivate_rpolynomial();
+        for k in 0..len
+        {
+            const NEWTON: usize = NEWTON_POLYNOMIAL_ROOTS;
+
+            for _ in 0..NEWTON
+            {
+                let root = roots[k];
+                let df = p.rpolynomial(root);
+                if df.is_zero()
+                {
+                    break
+                }
+                roots[k] -= df/dp.rpolynomial(root)
+            }
+        }
+        roots.into_iter()
+            .collect()
+    }
+    
     fn trim_zeros(&self) -> &[T]
     where
         T: Zero
@@ -458,14 +733,21 @@ impl<T> SliceMath<T> for [T]
     }
 }
 
+#[cfg(test)]
+#[cfg(feature = "ndarray")]
 #[test]
 fn test()
 {
-    let mut x = [1.0, 1.0, 0.0, 0.0];
-    let mut y = [Complex::zero(); 3];
+    let p = [-1.0, 0.0, 1.0];
 
-    x.real_fft(&mut y);
-    x.real_ifft(&y);
+    let p = p.map(|b| Complex::new(b, 0.0));
 
-    println!("{:?}", x)
+    let r: Vec<_> = p.rpolynomial_roots();
+
+    println!("x = {:?}", r);
+
+    for r in r
+    {
+        println!("p = {:?}", p.rpolynomial(r));
+    }
 }
