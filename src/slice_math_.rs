@@ -1,3 +1,4 @@
+use core::any::Any;
 use std::{f64::consts::TAU, iter::Sum, ops::{AddAssign, Div, DivAssign, Mul, MulAssign, Neg, SubAssign}};
 
 use num::{complex::ComplexFloat, traits::Inv, Complex, Float, NumCast, One, Zero};
@@ -57,9 +58,10 @@ pub trait SliceMath<T>: SliceOps<T>
         
     fn convolve_fft<Rhs, C>(&self, rhs: &[Rhs]) -> C
     where
-        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<T::Real>> + Sum + Mul<Rhs>,
-        Rhs: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<Rhs::Real>> + Sum,
-        <T as Mul<Rhs>>::Output: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real>> + Sum,
+        T: ComplexFloat + Mul<Rhs, Output: ComplexFloat + From<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real> + 'static>,
+        Rhs: ComplexFloat,
+        Complex<T::Real>: From<T> + AddAssign + MulAssign + Mul<Complex<Rhs::Real>, Output: ComplexFloat<Real = <<T as Mul<Rhs>>::Output as ComplexFloat>::Real> + MulAssign + AddAssign + From<Complex<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real>> + Sum + 'static>,
+        Complex<Rhs::Real>: From<Rhs> + AddAssign + MulAssign,
         C: FromIterator<<T as Mul<Rhs>>::Output>;
         
     fn dtft(&self, omega: T::Real) -> T
@@ -301,18 +303,23 @@ impl<T> SliceMath<T> for [T]
     
     fn convolve_fft<Rhs, C>(&self, rhs: &[Rhs]) -> C
     where
-        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<T::Real>> + Sum + Mul<Rhs>,
-        Rhs: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<Rhs::Real>> + Sum,
-        <T as Mul<Rhs>>::Output: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real>> + Sum,
+        T: ComplexFloat + Mul<Rhs, Output: ComplexFloat + From<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real> + 'static>,
+        Rhs: ComplexFloat,
+        Complex<T::Real>: From<T> + AddAssign + MulAssign + Mul<Complex<Rhs::Real>, Output: ComplexFloat<Real = <<T as Mul<Rhs>>::Output as ComplexFloat>::Real> + MulAssign + AddAssign + From<Complex<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real>> + Sum + 'static>,
+        Complex<Rhs::Real>: From<Rhs> + AddAssign + MulAssign,
         C: FromIterator<<T as Mul<Rhs>>::Output>
     {
         let y_len = (self.len() + rhs.len()).saturating_sub(1);
         let len = y_len.next_power_of_two();
 
-        let mut x: Vec<T> = self.to_vec();
-        let mut h: Vec<Rhs> = rhs.to_vec();
-        x.resize(len, T::zero());
-        h.resize(len, Rhs::zero());
+        let mut x: Vec<Complex<T::Real>> = self.iter()
+            .map(|&x| x.into())
+            .collect();
+        let mut h: Vec<Complex<Rhs::Real>> = rhs.iter()
+            .map(|&h| h.into())
+            .collect();
+        x.resize(len, Zero::zero());
+        h.resize(len, Zero::zero());
         x.fft();
         h.fft();
 
@@ -325,6 +332,16 @@ impl<T> SliceMath<T> for [T]
         y.truncate(y_len);
         
         y.into_iter()
+            .map(|y| {
+                if let Some(y) = <dyn Any>::downcast_ref::<<T as Mul<Rhs>>::Output>(&y as &dyn Any)
+                {
+                    *y
+                }
+                else
+                {
+                    y.re().into()
+                }
+            })
             .collect()
     }
     
