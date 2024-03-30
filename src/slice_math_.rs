@@ -183,6 +183,10 @@ pub trait SliceMath<T>: SliceOps<T>
         T: Copy + Neg + Zero,
         <T as Neg>::Output: One + Zero + DivAssign<T>;
     #[cfg(feature = "ndarray")]
+    fn vandermonde_matrix(&self, n: usize) -> ndarray::Array2<T>
+    where
+        T: One + Copy + Mul;
+    #[cfg(feature = "ndarray")]
     fn polynomial_roots<S>(&self) -> S
     where
         Complex<<T as ComplexFloat>::Real>: From<T> + AddAssign + SubAssign + MulAssign + DivAssign + DivAssign<<T as ComplexFloat>::Real>,
@@ -194,6 +198,15 @@ pub trait SliceMath<T>: SliceOps<T>
         Complex<<T as ComplexFloat>::Real>: From<T> + AddAssign + SubAssign + MulAssign + DivAssign + DivAssign<<T as ComplexFloat>::Real>,
         T: ComplexFloat + ndarray_linalg::Lapack<Complex = Complex<<T as ComplexFloat>::Real>>,
         S: FromIterator<Complex<<T as ComplexFloat>::Real>>;
+        
+    #[cfg(feature = "ndarray")]
+    fn polyfit(&self, y: &[T], n: usize) -> Vec<T>
+    where
+        T: ndarray_linalg::Lapack;
+    #[cfg(feature = "ndarray")]
+    fn rpolyfit(&self, y: &[T], n: usize) -> Vec<T>
+    where
+        T: ndarray_linalg::Lapack;
         
     fn trim_zeros(&self) -> &[T]
     where
@@ -642,6 +655,22 @@ impl<T> SliceMath<T> for [T]
         c
     }
     #[cfg(feature = "ndarray")]
+    fn vandermonde_matrix(&self, n: usize) -> ndarray::Array2<T>
+    where
+        T: One + Copy + Mul
+    {
+        let l = self.len();
+        let mut m = ndarray::Array2::from_elem((l, n), T::one());
+        for j in (0..n - 1).rev()
+        {
+            for k in 0..l
+            {
+                m[(k, j)] = self[k]*m[(k, j + 1)]
+            }
+        }
+        m
+    }
+    #[cfg(feature = "ndarray")]
     fn polynomial_roots<S>(&self) -> S
     where
         Complex<<T as ComplexFloat>::Real>: From<T> + AddAssign + SubAssign + MulAssign + DivAssign + DivAssign<<T as ComplexFloat>::Real>,
@@ -710,6 +739,35 @@ impl<T> SliceMath<T> for [T]
         }
         roots.into_iter()
             .collect()
+    }
+    
+    #[cfg(feature = "ndarray")]
+    fn polyfit(&self, y: &[T], n: usize) -> Vec<T>
+    where
+        T: ndarray_linalg::Lapack
+    {
+        let mut p = self.rpolyfit(y, n);
+        p.reverse();
+        p
+    }
+    #[cfg(feature = "ndarray")]
+    fn rpolyfit(&self, y: &[T], n: usize) -> Vec<T>
+    where
+        T: ndarray_linalg::Lapack
+    {
+        use ndarray::ArrayView2;
+        use ndarray_linalg::{Solve, QR};
+
+        let v = self.vandermonde_matrix(n + 1);
+
+        let (q, r) = v.qr()
+            .unwrap();
+        let qtmy = q.t()
+            .dot(&ArrayView2::from_shape((y.len(), 1), y).unwrap());
+        let p = r.solve(&qtmy.column(0))
+            .unwrap();
+
+        p.to_vec()
     }
     
     fn trim_zeros(&self) -> &[T]

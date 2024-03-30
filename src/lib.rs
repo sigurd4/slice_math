@@ -31,6 +31,19 @@ mod tests {
 
     use super::*;
 
+    #[test]
+    fn test_polyfit()
+    {
+        let p = [2.0, -4.0, 1.0];
+
+        let x = [4.0, -1.0, 6.0, 7.0];
+        let y = x.map(|x| p.rpolynomial(x));
+
+        let p = x.rpolyfit(&y, 2);
+
+        println!("{:?}", p);
+    }
+
     const PLOT_TARGET: &str = "plots";
 
     pub fn benchmark<T, R>(x: &[T], f: &dyn Fn(T) -> R) -> Duration
