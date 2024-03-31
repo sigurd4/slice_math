@@ -205,7 +205,11 @@ pub trait SliceMath<T>: SliceOps<T>
         T: ndarray_linalg::Lapack;
         
     #[cfg(feature = "ndarray")]
-    fn toeplitz(&self) -> ndarray::Array2<T>
+    fn toeplitz_matrix(&self) -> ndarray::Array2<T>
+    where
+        T: Copy;
+    #[cfg(feature = "ndarray")]
+    fn hankel_matrix(&self, r: &[T]) -> ndarray::Array2<T>
     where
         T: Copy;
         
@@ -757,7 +761,7 @@ impl<T> SliceMath<T> for [T]
     }
     
     #[cfg(feature = "ndarray")]
-    fn toeplitz(&self) -> ndarray::Array2<T>
+    fn toeplitz_matrix(&self) -> ndarray::Array2<T>
     where
         T: Copy
     {
@@ -765,6 +769,24 @@ impl<T> SliceMath<T> for [T]
 
         let n = self.len();
         Array2::from_shape_fn((n, n), |(i, j)| self[if i >= j {i - j} else {j - i}])
+    }
+    #[cfg(feature = "ndarray")]
+    fn hankel_matrix(&self, r: &[T]) -> ndarray::Array2<T>
+    where
+        T: Copy
+    {
+        use ndarray::Array2;
+
+        let n = self.len();
+        let m = r.len();
+        Array2::from_shape_fn((n, m), |(i, j)| if i + j < n
+        {
+            self[i + j]
+        }
+        else
+        {
+            r[i + j + 1 - n]
+        })
     }
     
     fn trim_zeros(&self) -> &[T]
