@@ -64,14 +64,10 @@ pub trait SliceMath<T>: SliceOps<T>
         Complex<Rhs::Real>: From<Rhs> + AddAssign + MulAssign,
         C: FromIterator<<T as Mul<Rhs>>::Output>;
         
-    fn dtft(&self, omega: T::Real) -> T
+    fn dtft(&self, omega: T::Real) -> Complex<T::Real>
     where
-        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<T::Real>> + Sum;
-        
-    fn real_dtft(&self, omega: T) -> Complex<T>
-    where
-        T: Float,
-        Complex<T>: ComplexFloat<Real = T> + MulAssign + AddAssign;
+        T: ComplexFloat + Into<Complex<T::Real>>,
+        Complex<T::Real>: ComplexFloat<Real = T::Real> + MulAssign + AddAssign;
         
     #[doc(hidden)]
     fn fft_unscaled<const I: bool>(&mut self)
@@ -358,32 +354,17 @@ impl<T> SliceMath<T> for [T]
             .collect()
     }
     
-    fn dtft(&self, omega: T::Real) -> T
+    fn dtft(&self, omega: T::Real) -> Complex<T::Real>
     where
-        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<T::Real>> + Sum
-    {
-        let mut y = T::zero();
-        let z1 = <T as From<_>>::from(Complex::cis(-omega));
-        let mut z = T::one();
-        for &x in self
-        {
-            y += x*z;
-            z *= z1;
-        }
-        y
-    }
-        
-    fn real_dtft(&self, omega: T) -> Complex<T>
-    where
-        T: Float,
-        Complex<T>: ComplexFloat<Real = T> + MulAssign + AddAssign
+        T: ComplexFloat + Into<Complex<T::Real>>,
+        Complex<T::Real>: ComplexFloat<Real = T::Real> + MulAssign + AddAssign
     {
         let mut y = Complex::zero();
         let z1 = Complex::cis(-omega);
         let mut z = Complex::one();
         for &x in self
         {
-            y += <Complex<_> as From<_>>::from(x)*z;
+            y += x.into()*z;
             z *= z1;
         }
         y
