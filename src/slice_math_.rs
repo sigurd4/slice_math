@@ -1,7 +1,7 @@
 use core::any::Any;
-use std::{f64::consts::TAU, iter::Sum, ops::{AddAssign, Div, DivAssign, Mul, MulAssign, Neg, SubAssign}};
+use std::{iter::Sum, ops::{AddAssign, Div, DivAssign, Mul, MulAssign, Neg, SubAssign}};
 
-use num::{complex::ComplexFloat, traits::Inv, Complex, Float, NumCast, One, Zero};
+use num::{complex::ComplexFloat, traits::{Inv, FloatConst}, Complex, Float, NumCast, One, Zero};
 use slice_ops::SliceOps;
 
 use crate::fft;
@@ -231,6 +231,15 @@ pub trait SliceMath<T>: SliceOps<T>
     fn trim_zeros_back_mut(&mut self) -> &mut [T]
     where
         T: Zero;
+        
+    fn frac_rotate_right(&mut self, shift: T::Real)
+    where
+        T: ComplexFloat<Real: Into<T> + SubAssign> + Into<Complex<<T>::Real>> + 'static,
+        Complex<T::Real>: AddAssign + MulAssign;
+    fn frac_rotate_left(&mut self, shift: T::Real)
+    where
+        T: ComplexFloat<Real: Into<T> + SubAssign> + Into<Complex<<T>::Real>> + 'static,
+        Complex<T::Real>: AddAssign + MulAssign;
 }
 
 impl<T> SliceMath<T> for [T]
@@ -825,23 +834,82 @@ impl<T> SliceMath<T> for [T]
     {
         self.trim_back_mut(Zero::is_zero)
     }
+
+    fn frac_rotate_right(&mut self, shift: T::Real)
+    where
+        T: ComplexFloat<Real: Into<T> + SubAssign> + Into<Complex<<T>::Real>> + 'static,
+        Complex<T::Real>: AddAssign + MulAssign
+    {
+        let (trunc, fract) = if let Some(trunc) = NumCast::from(shift.trunc())
+        {
+            (trunc, shift.fract())
+        }
+        else
+        {
+            (0, shift)
+        };
+        if !fract.is_zero()
+        {
+            let mut x: Vec<Complex<T::Real>> = self.iter()
+                .map(|&x| x.into())
+                .collect();
+            x.fft();
+            let n = <T::Real as NumCast>::from(x.len()).unwrap();
+            let one = T::Real::one();
+            let two = one + one;
+            for (k, x) in x.iter_mut()
+                .enumerate()
+            {
+                let mut k = <T::Real as NumCast>::from(k).unwrap();
+                if k > n/two
+                {
+                    k -= n;
+                }
+                
+                let z = Complex::cis(-T::Real::TAU()*fract*k/n);
+                *x *= z
+            }
+            x.ifft();
+            for (y, x) in self.iter_mut()
+                .zip(x.into_iter())
+            {
+                if let Some(y) = <dyn Any>::downcast_mut::<Complex<T::Real>>(y as &mut dyn Any)
+                {
+                    *y = x
+                }
+                else
+                {
+                    *y = x.re.into()
+                }
+            }
+        }
+
+        if shift.is_sign_positive()
+        {
+            self.rotate_right(trunc)
+        }
+        else
+        {
+            self.rotate_left(trunc)
+        }
+    }
+    fn frac_rotate_left(&mut self, shift: T::Real)
+    where
+        T: ComplexFloat<Real: Into<T> + SubAssign> + Into<Complex<<T>::Real>> + 'static,
+        Complex<T::Real>: AddAssign + MulAssign
+    {
+        self.frac_rotate_right(-shift)
+    }
 }
 
 #[cfg(test)]
-#[cfg(feature = "ndarray")]
 #[test]
 fn test()
 {
-    let p = [-1.0, 0.0, 1.0];
+    let mut p = [1.0, 0.0, 0.0, 0.0, 0.0];
+    
+    p.frac_rotate_right(0.5);
+    p.frac_rotate_right(0.5);
 
-    let p = p.map(|b| Complex::new(b, 0.0));
-
-    let r: Vec<_> = p.rpolynomial_roots();
-
-    println!("x = {:?}", r);
-
-    for r in r
-    {
-        println!("p = {:?}", p.rpolynomial(r));
-    }
+    println!("{:?}", p);
 }
