@@ -142,7 +142,7 @@ where
             slice[k] = x.iter()
                 .map(|x| {
                     let x = x[k % m];
-                    let y = x*wn_pk;
+                    let y = x*e;
                     e *= wn_pk;
                     y
                 }).sum::<T>();
@@ -176,7 +176,7 @@ where
             slice[k] = x.iter()
                 .map(|x| {
                     let x = x[k % m];
-                    let y = x*wn_pk;
+                    let y = x*e;
                     e *= wn_pk;
                     y
                 }).sum::<T>();
