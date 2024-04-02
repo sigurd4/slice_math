@@ -31,6 +31,7 @@ mod tests {
 
     use super::*;
 
+    #[cfg(feature = "ndarray")]
     #[test]
     fn test_polyfit()
     {
