@@ -130,11 +130,16 @@ pub trait SliceMath<T>: SliceOps<T>
     where
         T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<T::Real>> + Sum;
         
+    /// Walsh-Hadamard transform
     fn fwht_unscaled(&mut self)
     where
         T: Add<Output = T> + Sub<Output = T> + Copy;
-    
+    /// Normalized Walsh-Hadamard transform
     fn fwht(&mut self)
+    where
+        T: ComplexFloat + MulAssign<T::Real>;
+    /// Normalized inverse Walsh-Hadamard transform
+    fn ifwht(&mut self)
     where
         T: ComplexFloat + MulAssign<T::Real>;
         
@@ -480,13 +485,19 @@ impl<T> SliceMath<T> for [T]
             h *= 2;
         }
     }
-    
     fn fwht(&mut self)
     where
         T: ComplexFloat + MulAssign<T::Real>
     {
         self.fwht_unscaled();
         self.mul_assign_all(Float::powi(T::Real::FRAC_1_SQRT_2(), (self.len().ilog2() + 3).try_into().unwrap()))
+    }
+    fn ifwht(&mut self)
+    where
+        T: ComplexFloat + MulAssign<T::Real>
+    {
+        self.fwht_unscaled();
+        self.mul_assign_all(Float::powi(T::Real::FRAC_1_SQRT_2(), TryInto::<i32>::try_into(self.len().ilog2()).unwrap() - 3))
     }
     
     fn real_fft(&self, y: &mut [Complex<T>])
