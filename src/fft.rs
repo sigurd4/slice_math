@@ -42,7 +42,7 @@ where
     {
         // In-place FFT
 
-        slice.bit_reverse_permutation();
+        slice.bit_rev_permutation();
         
         for s in 0..len.ilog2()
         {

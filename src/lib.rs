@@ -21,6 +21,7 @@ pub use slice_ops::*;
 
 #[cfg(test)]
 mod tests {
+    use core::f64::consts::SQRT_2;
     use std::{f32::NAN, ops::RangeBounds, time::{Duration, SystemTime}};
 
     //use array__ops::{Array2dOps, ArrayNd, ArrayOps};
@@ -30,6 +31,15 @@ mod tests {
     //use rustfft::{Fft, FftPlanner};
 
     use super::*;
+    
+    #[test]
+    fn wht()
+    {
+        let mut a = [19, -1, 11, -9, -7, 13, -15, 5].map(|a| a as f64);
+        a.fwht();
+        //a.fwht();
+        println!("{:?}", a)
+    }
 
     #[cfg(feature = "ndarray")]
     #[test]

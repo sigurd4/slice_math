@@ -1,4 +1,4 @@
-use core::any::Any;
+use core::{any::Any, ops::{Add, Sub}};
 use std::{iter::Sum, ops::{AddAssign, Div, DivAssign, Mul, MulAssign, Neg, SubAssign}};
 
 use num::{complex::ComplexFloat, traits::{Inv, FloatConst}, Complex, Float, NumCast, One, Zero};
@@ -129,6 +129,14 @@ pub trait SliceMath<T>: SliceOps<T>
     fn ifft(&mut self)
     where
         T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<T::Real>> + Sum;
+        
+    fn fwht_unscaled(&mut self)
+    where
+        T: Add<Output = T> + Sub<Output = T> + Copy;
+    
+    fn fwht(&mut self)
+    where
+        T: ComplexFloat + MulAssign<T::Real>;
         
     fn real_fft(&self, y: &mut [Complex<T>])
     where
@@ -443,6 +451,42 @@ impl<T> SliceMath<T> for [T]
         self.fft_unscaled::<true>();
 
         self.mul_assign_all(<T as From<_>>::from(<Complex<_> as From<_>>::from(<T::Real as NumCast>::from(1.0/self.len() as f64).unwrap())));
+    }
+    
+    fn fwht_unscaled(&mut self)
+    where
+        T: Add<Output = T> + Sub<Output = T> + Copy
+    {
+        let len = self.len();
+        if len <= 2
+        {
+            return;
+        }
+        assert!(len.is_power_of_two(), "Length must be a power of two.");
+
+        let mut h = 1;
+        while h < len
+        {
+            for i in (0..len).step_by(h*2)
+            {
+                for j in i..i + h
+                {
+                    let x = self[j];
+                    let y = self[j + h];
+                    self[j] = x + y;
+                    self[j + h] = x - y;
+                }
+            }
+            h *= 2;
+        }
+    }
+    
+    fn fwht(&mut self)
+    where
+        T: ComplexFloat + MulAssign<T::Real>
+    {
+        self.fwht_unscaled();
+        self.mul_assign_all(Float::powi(T::Real::FRAC_1_SQRT_2(), (self.len().ilog2() + 3).try_into().unwrap()))
     }
     
     fn real_fft(&self, y: &mut [Complex<T>])
