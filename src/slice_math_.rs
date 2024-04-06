@@ -1,7 +1,7 @@
 use core::{any::Any, ops::{Add, Sub}};
 use std::{iter::Sum, ops::{AddAssign, Div, DivAssign, Mul, MulAssign, Neg, SubAssign}};
 
-use num::{complex::ComplexFloat, traits::{Inv, FloatConst}, Complex, Float, NumCast, One, Zero};
+use num::{complex::ComplexFloat, traits::{FloatConst, Inv}, Complex, Float, NumCast, One, ToPrimitive, Zero};
 use slice_ops::SliceOps;
 
 use crate::fft;
@@ -131,17 +131,60 @@ pub trait SliceMath<T>: SliceOps<T>
         T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<T::Real>> + Sum;
         
     /// Walsh-Hadamard transform
-    fn dwht_unscaled(&mut self)
+    fn fwht_unscaled(&mut self)
     where
         T: Add<Output = T> + Sub<Output = T> + Copy;
     /// Normalized Walsh-Hadamard transform
-    fn dwht(&mut self)
+    fn fwht(&mut self)
     where
         T: ComplexFloat + MulAssign<T::Real>;
     /// Normalized inverse Walsh-Hadamard transform
-    fn idwht(&mut self)
+    fn ifwht(&mut self)
     where
         T: ComplexFloat + MulAssign<T::Real>;
+
+    fn fht(&mut self)
+    where
+        T: ComplexFloat<Real: Into<T>> + Into<Complex<T::Real>> + 'static,
+        Complex<T::Real>: AddAssign + MulAssign;
+    fn ifht(&mut self)
+    where
+        T: ComplexFloat<Real: Into<T>> + Into<Complex<T::Real>> + 'static,
+        Complex<T::Real>: AddAssign + MulAssign;
+        
+    fn dst_i(&mut self)
+    where
+        T: ComplexFloat<Real: Into<T>> + Into<Complex<T::Real>> + 'static,
+        Complex<T::Real>: AddAssign + MulAssign + DivAssign<T::Real>;
+    fn dst_ii(&mut self)
+    where
+        T: ComplexFloat<Real: Into<T>> + Into<Complex<T::Real>> + 'static,
+        Complex<T::Real>: AddAssign + MulAssign;
+    fn dst_iii(&mut self)
+    where
+        T: ComplexFloat<Real: Into<T>> + Into<Complex<T::Real>> + 'static,
+        Complex<T::Real>: AddAssign + MulAssign + Mul<T, Output = Complex<T::Real>>;
+    fn dst_iv(&mut self)
+    where
+        T: ComplexFloat<Real: Into<T>> + Into<Complex<T::Real>> + 'static,
+        Complex<T::Real>: AddAssign + MulAssign + Mul<T, Output = Complex<T::Real>>;
+        
+    fn dct_i(&mut self)
+    where
+        T: ComplexFloat<Real: Into<T>> + Into<Complex<T::Real>> + DivAssign<T::Real> + 'static,
+        Complex<T::Real>: AddAssign + MulAssign + DivAssign<T::Real>;
+    fn dct_ii(&mut self)
+    where
+        T: ComplexFloat<Real: Into<T>> + Into<Complex<T::Real>> + 'static,
+        Complex<T::Real>: AddAssign + MulAssign;
+    fn dct_iii(&mut self)
+    where
+        T: ComplexFloat<Real: Into<T>> + Into<Complex<T::Real>> + 'static,
+        Complex<T::Real>: AddAssign + MulAssign + Mul<T, Output = Complex<T::Real>> + DivAssign<T::Real>;
+    fn dct_iv(&mut self)
+    where
+        T: ComplexFloat<Real: Into<T>> + Into<Complex<T::Real>> + 'static,
+        Complex<T::Real>: AddAssign + MulAssign + Mul<T, Output = Complex<T::Real>>;
         
     fn real_fft(&self, y: &mut [Complex<T>])
     where
@@ -424,7 +467,7 @@ impl<T> SliceMath<T> for [T]
         self.mul_assign_all(<T as From<_>>::from(<Complex<_> as From<_>>::from(<T::Real as NumCast>::from(1.0/self.len() as f64).unwrap())));
     }
     
-    fn dwht_unscaled(&mut self)
+    fn fwht_unscaled(&mut self)
     where
         T: Add<Output = T> + Sub<Output = T> + Copy
     {
@@ -451,19 +494,544 @@ impl<T> SliceMath<T> for [T]
             h *= 2;
         }
     }
-    fn dwht(&mut self)
+    fn fwht(&mut self)
     where
         T: ComplexFloat + MulAssign<T::Real>
     {
-        self.dwht_unscaled();
+        self.fwht_unscaled();
         self.mul_assign_all(Float::powi(T::Real::FRAC_1_SQRT_2(), (self.len().ilog2() + 3).try_into().unwrap()))
     }
-    fn idwht(&mut self)
+    fn ifwht(&mut self)
     where
         T: ComplexFloat + MulAssign<T::Real>
     {
-        self.dwht_unscaled();
+        self.fwht_unscaled();
         self.mul_assign_all(Float::powi(T::Real::FRAC_1_SQRT_2(), TryInto::<i32>::try_into(self.len().ilog2()).unwrap() - 3))
+    }
+
+    fn fht(&mut self)
+    where
+        T: ComplexFloat<Real: Into<T> + Into<Complex<T::Real>>> + Into<Complex<T::Real>> + 'static,
+        Complex<T::Real>: AddAssign + MulAssign
+    {
+        if core::intrinsics::type_id::<T>() == core::intrinsics::type_id::<Complex<T::Real>>()
+        {
+            let x = unsafe {
+                core::mem::transmute::<&mut Self, &mut [Complex<T::Real>]>(self)
+            };
+            x.fft();
+
+            for x in x.iter_mut()
+            {
+                *x = (x.re - x.im).into()
+            }
+
+            return
+        }
+
+        let mut y: Vec<_> = self.iter()
+            .map(|&y| y.into())
+            .collect();
+        y.fft();
+        
+        for (x, y) in self.iter_mut()
+            .zip(y.into_iter())
+        {
+            *x = (y.re - y.im).into()
+        }
+    }
+    fn ifht(&mut self)
+    where
+        T: ComplexFloat<Real: Into<T> + Into<Complex<T::Real>>> + Into<Complex<T::Real>> + 'static,
+        Complex<T::Real>: AddAssign + MulAssign
+    {
+        if core::intrinsics::type_id::<T>() == core::intrinsics::type_id::<Complex<T::Real>>()
+        {
+            let x = unsafe {
+                core::mem::transmute::<&mut Self, &mut [Complex<T::Real>]>(self)
+            };
+            x.ifft();
+
+            for x in x.iter_mut()
+            {
+                *x = (x.re + x.im).into()
+            }
+
+            return
+        }
+
+        let mut y: Vec<_> = self.iter()
+            .map(|&y| y.into())
+            .collect();
+        y.ifft();
+        
+        for (x, y) in self.iter_mut()
+            .zip(y.into_iter())
+        {
+            *x = (y.re + y.im).into()
+        }
+    }
+    
+    fn dst_i(&mut self)
+    where
+        T: ComplexFloat<Real: Into<T>> + Into<Complex<T::Real>> + 'static,
+        Complex<T::Real>: AddAssign + MulAssign + DivAssign<T::Real>
+    {
+        let len = self.len();
+        if len <= 1
+        {
+            return
+        }
+
+        let mut y: Vec<_> = core::iter::once(Zero::zero())
+            .chain(self.iter()
+                .map(|&x| x.into())
+            ).chain(core::iter::once(Zero::zero()))
+            .chain(self.iter()
+                .rev()
+                .map(|&x| (-x).into())
+            ).collect();
+        y.fft();
+
+        let ylen = y.len();
+        let ylen_sqrt = Float::sqrt(<T::Real as NumCast>::from(ylen).unwrap());
+        for y in y.iter_mut()
+        {
+            *y /= ylen_sqrt
+        }
+
+        let zero = T::Real::zero();
+        let one = T::Real::one();
+        let two = one + one;
+        let ymul = Complex::new(zero, Float::recip(two));
+    
+        let y2 = y.split_off(len + 1);
+
+        for ((x, y1), y2) in self.iter_mut()
+            .zip(y.into_iter()
+                .skip(1)
+            ).zip(y2.into_iter()
+                .rev()
+            )
+        {
+            let y = (y1 - y2)*ymul;
+            if let Some(x) = <dyn Any>::downcast_mut::<Complex<_>>(x as &mut dyn Any)
+            {
+                *x = y
+            }
+            else
+            {
+                *x = y.re.into()
+            }
+        }
+    }
+    fn dst_ii(&mut self)
+    where
+        T: ComplexFloat<Real: Into<T>> + Into<Complex<T::Real>> + 'static,
+        Complex<T::Real>: AddAssign + MulAssign
+    {
+        let len = self.len();
+        if len <= 1
+        {
+            return
+        }
+        let lenf = <T::Real as NumCast>::from(len).unwrap();
+
+        let mut y: Vec<_> = self.iter()
+            .map(|&x| x.into())
+            .chain(self.iter()
+                .rev()
+                .map(|&x| -x.into())
+            ).collect();
+        y.fft();
+    
+        let zero = T::Real::zero();
+        let one = T::Real::one();
+        let two = one + one;
+    
+        let mul = Complex::new(zero, Float::recip(Float::sqrt(lenf))/two);
+        for y in y.iter_mut()
+        {
+            *y *= mul
+        }
+    
+        let m1 = (1..len).map(|i| {
+                let i = <T::Real as NumCast>::from(i).unwrap();
+                Complex::from_polar(T::Real::FRAC_1_SQRT_2(), -i*T::Real::FRAC_PI_2()/lenf)
+            }).chain(core::iter::once(Complex::new(zero, -one)));
+    
+        let m2 = (1..len).map(|i| {
+            let i = <T::Real as NumCast>::from(i).unwrap();
+            Complex::from_polar(-T::Real::FRAC_1_SQRT_2(), i*T::Real::FRAC_PI_2()/lenf)
+        });
+    
+        y.remove(0);
+        let y2 = y.split_off(len);
+    
+        for ((x, y1), y2) in self.iter_mut()
+            .zip(y.into_iter()
+                .zip(m1)
+                .map(|(y, m1)| y*m1)
+            ).zip(y2.into_iter()
+                .rev()
+                .zip(m2)
+                .map(|(y, m2)| y*m2)
+                .chain(core::iter::once(Zero::zero()))
+            )
+        {
+            let y = y1 + y2;
+            if let Some(x) = <dyn Any>::downcast_mut::<Complex<_>>(x as &mut dyn Any)
+            {
+                *x = y
+            }
+            else
+            {
+                *x = y.re.into()
+            }
+        }
+    }
+    fn dst_iii(&mut self)
+    where
+        T: ComplexFloat<Real: Into<T>> + Into<Complex<T::Real>> + 'static,
+        Complex<T::Real>: AddAssign + MulAssign + Mul<T::Real, Output = Complex<T::Real>> + Mul<T, Output = Complex<T::Real>>
+    {
+        let len = self.len();
+        if len <= 1
+        {
+            return
+        }
+        let lenf = <T::Real as NumCast>::from(len).unwrap();
+
+        let m1 = (1..len).map(|i| {
+                let i = <T::Real as NumCast>::from(i).unwrap();
+                Complex::from_polar(T::Real::FRAC_1_SQRT_2(), i*T::Real::FRAC_PI_2()/lenf)
+            }).chain(core::iter::once(Complex::i()));
+        let m2 = (1..len).map(|i| {
+                let i = <T::Real as NumCast>::from(i).unwrap();
+                Complex::from_polar(-T::Real::FRAC_1_SQRT_2(), -i*T::Real::FRAC_PI_2()/lenf)
+            }).rev();
+        
+        let mut y: Vec<_> = core::iter::once(Complex::zero())
+            .chain(self.iter()
+                .zip(m1)
+                .map(|(&x, m1)| m1*x)
+            ).chain(self[..len - 1].iter()
+                .rev()
+                .zip(m2)
+                .map(|(&x, m2)| m2*x)
+            ).collect();
+        y.ifft();
+
+        let zero = T::Real::zero();
+        let one = T::Real::one();
+        let two = one + one;
+
+        let ymul = Complex::new(zero, -Float::sqrt(lenf)*two);
+        for (x, mut y) in self.iter_mut()
+            .zip(y.into_iter())
+        {
+            y *= ymul;
+            if let Some(x) = <dyn Any>::downcast_mut::<Complex<_>>(x as &mut dyn Any)
+            {
+                *x = y
+            }
+            else
+            {
+                *x = y.re.into()
+            }
+        }
+    }
+    fn dst_iv(&mut self)
+    where
+        T: ComplexFloat<Real: Into<T>> + Into<Complex<T::Real>> + 'static,
+        Complex<T::Real>: AddAssign + MulAssign + Mul<T::Real, Output = Complex<T::Real>> + Mul<T, Output = Complex<T::Real>>
+    {
+        let len = self.len();
+        if len <= 1
+        {
+            return
+        }
+        let lenf = <T::Real as NumCast>::from(len).unwrap();
+
+        let m1: Vec<_> = (0..len).map(|i| {
+                let i = <T::Real as NumCast>::from(i).unwrap();
+                Complex::from_polar(T::Real::FRAC_1_SQRT_2(), -i*T::Real::FRAC_PI_2()/lenf)
+            }).chain(core::iter::once(Complex::i()))
+            .collect();
+        let m2: Vec<_> = (1..=len).map(|i| {
+                let i = <T::Real as NumCast>::from(i).unwrap();
+                Complex::from_polar(-T::Real::FRAC_1_SQRT_2(), i*T::Real::FRAC_PI_2()/lenf)
+            }).collect();
+
+        let mut y: Vec<_> = self.iter()
+            .zip(m1.iter())
+            .map(|(&x, &m1)| m1*x)
+            .chain(self.iter()
+                .rev()
+                .zip(m2.iter()
+                    .rev()
+                ).map(|(&x, &m2)| m2*x)
+            ).collect();
+        y.fft();
+
+        let zero = T::Real::zero();
+
+        let ymul = Complex::new(zero, T::Real::FRAC_1_SQRT_2()/Float::sqrt(lenf))*Complex::cis(-T::Real::FRAC_PI_4()/lenf);
+        for y in y.iter_mut()
+        {
+            *y *= ymul
+        }
+
+        let y2 = y.split_off(len);
+        
+        for ((x, y1), y2) in self.iter_mut()
+            .zip(y.into_iter()
+                .zip(m1.into_iter())
+                .map(|(y, m1)| y*m1)
+            ).zip(y2.into_iter()
+                .rev()
+                .zip(m2.into_iter())
+                .map(|(y, m2)| y*m2)
+            )
+        {
+            let y = y1 + y2;
+            if let Some(x) = <dyn Any>::downcast_mut::<Complex<_>>(x as &mut dyn Any)
+            {
+                *x = y
+            }
+            else
+            {
+                *x = y.re.into()
+            }
+        }
+    }
+
+    fn dct_i(&mut self)
+    where
+        T: ComplexFloat<Real: Into<T>> + Into<Complex<T::Real>> + DivAssign<T::Real> + 'static,
+        Complex<T::Real>: AddAssign + MulAssign + DivAssign<T::Real>
+    {
+        let len = self.len();
+        if len <= 1
+        {
+            return
+        }
+
+        let mut y: Vec<_> = self.iter()
+            .map(|&x| x.into())
+            .chain(self[1..len - 1].iter()
+                .rev()
+                .map(|&x| x.into())
+            ).collect();
+        for y in y[1..len - 1].iter_mut()
+        {
+            *y /= T::Real::SQRT_2()
+        }
+        for y in y[len..].iter_mut()
+        {
+            *y /= T::Real::SQRT_2()
+        }
+        y.fft();
+
+        let ylen = y.len();
+        let ylen_sqrt = Float::sqrt(<T::Real as NumCast>::from(ylen).unwrap());
+        for y in y.iter_mut()
+        {
+            *y /= ylen_sqrt
+        }
+
+        let y2 = y.split_off(len);
+
+        for ((x, y1), y2) in self.iter_mut()
+            .zip(y.into_iter())
+            .zip(core::iter::once(Zero::zero())
+                .chain(y2.into_iter()
+                    .rev()
+                ).chain(core::iter::once(Zero::zero()))
+            )
+        {
+            let y = y1 + y2;
+            if let Some(x) = <dyn Any>::downcast_mut::<Complex<_>>(x as &mut dyn Any)
+            {
+                *x = y
+            }
+            else
+            {
+                *x = y.re.into()
+            }
+        }
+        for x in self[1..len - 1].iter_mut()
+        {
+            *x /= T::Real::SQRT_2()
+        }
+    }
+    fn dct_ii(&mut self)
+    where
+        T: ComplexFloat<Real: Into<T>> + Into<Complex<T::Real>> + 'static,
+        Complex<T::Real>: AddAssign + MulAssign
+    {
+        let len = self.len();
+        if len <= 1
+        {
+            return
+        }
+        let lenf = <T::Real as NumCast>::from(len).unwrap();
+
+        let m1 = core::iter::once(One::one())
+            .chain((1..len).map(|i| {
+                let i = <T::Real as NumCast>::from(i).unwrap();
+                Complex::from_polar(T::Real::FRAC_1_SQRT_2(), -i*T::Real::FRAC_PI_2()/lenf)
+            }));
+        let m2 = (1..len).map(|i| {
+                let i = <T::Real as NumCast>::from(i).unwrap();
+                Complex::from_polar(T::Real::FRAC_1_SQRT_2(), i*T::Real::FRAC_PI_2()/lenf)
+            });
+
+        let mut y: Vec<_> = self.iter()
+            .map(|&x| x.into())
+            .chain(self.iter()
+                .rev()
+                .map(|&x| x.into())
+            ).collect();
+        y.fft();
+
+        let y2 = y.split_off(len);
+
+        let one = T::Real::one();
+        let two = one + one;
+        let ydiv = Float::sqrt(lenf)*two;
+
+        for ((x, y1), y2) in self.iter_mut()
+            .zip(y.into_iter()
+                .zip(m1)
+                .map(|(y, m1)| y*m1)
+            ).zip(core::iter::once(Zero::zero())
+                .chain(y2.into_iter()
+                    .rev()
+                    .zip(m2)
+                    .map(|(y, m2)| y*m2)
+                )
+            )
+        {
+            let y = (y1 + y2)/ydiv;
+            if let Some(x) = <dyn Any>::downcast_mut::<Complex<_>>(x as &mut dyn Any)
+            {
+                *x = y
+            }
+            else
+            {
+                *x = y.re.into()
+            }
+        }
+    }
+    fn dct_iii(&mut self)
+    where
+        T: ComplexFloat<Real: Into<T>> + Into<Complex<T::Real>> + 'static,
+        Complex<T::Real>: AddAssign + MulAssign + Mul<T, Output = Complex<T::Real>> + Mul<T::Real, Output = Complex<T::Real>> + DivAssign<T::Real>
+    {
+        let len = self.len();
+        if len <= 1
+        {
+            return
+        }
+        let lenf = <T::Real as NumCast>::from(len).unwrap();
+
+        let m1 = core::iter::once(One::one())
+            .chain((1..len).map(|i| {
+                let i = <T::Real as NumCast>::from(i).unwrap();
+                Complex::from_polar(T::Real::FRAC_1_SQRT_2(), -i*T::Real::FRAC_PI_2()/lenf)
+            }));
+        let m2 = (1..len).map(|i| {
+                let i = <T::Real as NumCast>::from(i).unwrap();
+                Complex::from_polar(T::Real::FRAC_1_SQRT_2(), i*T::Real::FRAC_PI_2()/lenf)
+            }).rev();
+        
+        let mut y: Vec<_> = self.iter()
+            .zip(m1)
+            .map(|(&x, m1)| m1*x)
+            .chain(core::iter::once(Zero::zero()))
+            .chain(self.iter()
+                .rev()
+                .zip(m2)
+                .map(|(&x, m2)| m2*x)
+            ).collect();
+        y.fft();
+        
+        let ydiv = Float::sqrt(lenf);
+        for (x, mut y) in self.iter_mut()
+            .zip(y.into_iter())
+        {
+            y /= ydiv;
+            if let Some(x) = <dyn Any>::downcast_mut::<Complex<_>>(x as &mut dyn Any)
+            {
+                *x = y
+            }
+            else
+            {
+                *x = y.re.into()
+            }
+        }
+    }
+    fn dct_iv(&mut self)
+    where
+        T: ComplexFloat<Real: Into<T>> + Into<Complex<T::Real>> + 'static,
+        Complex<T::Real>: AddAssign + MulAssign + Mul<T, Output = Complex<T::Real>> + Mul<T::Real, Output = Complex<T::Real>>
+    {
+        let len = self.len();
+        if len <= 1
+        {
+            return
+        }
+        let lenf = <T::Real as NumCast>::from(len).unwrap();
+
+        let m1: Vec<_> = (0..len).map(|i| {
+                let i = <T::Real as NumCast>::from(i).unwrap();
+                Complex::from_polar(T::Real::FRAC_1_SQRT_2(), -i*T::Real::FRAC_PI_2()/lenf)
+            }).collect();
+        let m2: Vec<_> = (1..=len).map(|i| {
+                let i = <T::Real as NumCast>::from(i).unwrap();
+                Complex::from_polar(T::Real::FRAC_1_SQRT_2(), i*T::Real::FRAC_PI_2()/lenf)
+            }).collect();
+
+        let mut y: Vec<_> = self.iter()
+            .zip(m1.iter())
+            .map(|(&x, &m1)| m1*x)
+            .chain(self.iter()
+                .rev()
+                .zip(m2.iter()
+                    .rev()
+                ).map(|(&x, &m2)| m2*x)
+            ).collect();
+        y.fft();
+        
+        let ymul = Complex::cis(-T::Real::FRAC_PI_4()/lenf)*T::Real::FRAC_1_SQRT_2()/Float::sqrt(lenf);
+        for y in y.iter_mut()
+        {
+            *y *= ymul
+        }
+
+        let y2 = y.split_off(len);
+
+        for ((x, y1), y2) in self.iter_mut()
+            .zip(y.into_iter()
+                .zip(m1.into_iter())
+                .map(|(y, m1)| y*m1)
+            ).zip(y2.into_iter()
+                .rev()
+                .zip(m2.into_iter())
+                .map(|(y, m2)| y*m2)
+            )
+        {
+            let y = y1 + y2;
+            if let Some(x) = <dyn Any>::downcast_mut::<Complex<_>>(x as &mut dyn Any)
+            {
+                *x = y
+            }
+            else
+            {
+                *x = y.re.into()
+            }
+        }
     }
     
     fn real_fft(&self, y: &mut [Complex<T>])

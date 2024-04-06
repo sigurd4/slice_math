@@ -3,6 +3,9 @@
 #![feature(array_methods)]
 #![feature(let_chains)]
 #![feature(new_uninit)]
+#![feature(slice_as_chunks)]
+
+#![feature(core_intrinsics)]
 
 #![feature(generic_const_exprs)]
 
@@ -21,7 +24,7 @@ pub use slice_ops::*;
 
 #[cfg(test)]
 mod tests {
-    use core::f64::consts::SQRT_2;
+    use core::f64::consts::{FRAC_1_SQRT_2, SQRT_2};
     use std::{f32::NAN, ops::RangeBounds, time::{Duration, SystemTime}};
 
     //use array__ops::{Array2dOps, ArrayNd, ArrayOps};
@@ -31,12 +34,28 @@ mod tests {
     //use rustfft::{Fft, FftPlanner};
 
     use super::*;
+
+    #[test]
+    fn fft()
+    {
+        let mut a = [Complex::from(0.0); 120];
+        a.fft();
+    }
     
+    #[test]
+    fn dst()
+    {
+        let mut a: [f64; _] = [1.0];
+
+        a.dct_iv();
+        println!("{:?}", a);
+    }
+
     #[test]
     fn wht()
     {
         let mut a = [19, -1, 11, -9, -7, 13, -15, 5].map(|a| a as f64);
-        a.dwht();
+        a.fwht();
         //a.fwht();
         println!("{:?}", a)
     }
@@ -72,7 +91,7 @@ mod tests {
 
     #[test]
     #[ignore]
-    fn bench()
+    fn bench_fft()
     {
         let fn_name = "FFT";
 
@@ -124,6 +143,53 @@ mod tests {
         
         plot::plot_curves(plot_title, plot_path, [&*n; M], t.each_ref().map(|t| &**t)).expect("Plot error")
     }
+    
+    /*#[test]
+    #[ignore]
+    fn bench_fct()
+    {
+        let fn_name = "FCT";
+
+        const N: usize = 128 + 1;
+        const M: usize = 1;
+
+        let f: [_; M] = [
+            Box::new(|x: &mut [Complex<f32>]| {
+                x.fct();
+                x.ifct();
+            }) as Box<dyn Fn(&mut [Complex<f32>])>
+        ];
+        
+        let plot_title: &str = &format!("{fn_name} benchmark");
+        let plot_path: &str = &format!("{PLOT_TARGET}/{fn_name}_benchmark.png");
+        
+        let t = f.map(|f| {
+            let mut t: Box<[_; N]> = unsafe {Box::new_uninit().assume_init()};
+            for n in 0..N
+            {
+                let mut x = vec![Complex::from(1.0); n];
+                let t0 = SystemTime::now();
+                for _ in 0..1024
+                {
+                    f(&mut x);
+                }
+                let dt = SystemTime::now().duration_since(t0).unwrap();
+                println!("Done N = {}", n);
+                t[n] = dt.as_secs_f32()
+            }
+            t
+        });
+        let n = {
+            let mut n: Box<[_; N]> = unsafe {Box::new_uninit().assume_init()};
+            for i in 0..N
+            {
+                n[i] = i as f32;
+            }
+            n
+        };
+        
+        plot::plot_curves(plot_title, plot_path, [&*n; M], t.each_ref().map(|t| &**t)).expect("Plot error")
+    }*/
 
     /*#[test]
     fn bench()
