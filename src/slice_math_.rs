@@ -405,41 +405,7 @@ impl<T> SliceMath<T> for [T]
     where
         T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<<T>::Real>> + Sum
     {
-        if self.len() <= 1
-        {
-            return;
-        }
-        if !(
-            fft::fft_radix2_unscaled::<_, I>(self)
-            || fft::fft_radix3_unscaled::<_, I>(self)
-            || fft::fft_radix_p_unscaled::<_, 5, I>(self)
-            || fft::fft_radix_p_unscaled::<_, 7, I>(self)
-            || fft::fft_radix_p_unscaled::<_, 11, I>(self)
-            || fft::fft_radix_p_unscaled::<_, 13, I>(self)
-            || fft::fft_radix_p_unscaled::<_, 17, I>(self)
-            || fft::fft_radix_p_unscaled::<_, 19, I>(self)
-            || fft::fft_radix_p_unscaled::<_, 23, I>(self)
-            || fft::fft_radix_p_unscaled::<_, 29, I>(self)
-            || fft::fft_radix_p_unscaled::<_, 31, I>(self)
-            || fft::fft_radix_p_unscaled::<_, 37, I>(self)
-            || fft::fft_radix_p_unscaled::<_, 41, I>(self)
-            || fft::fft_radix_p_unscaled::<_, 43, I>(self)
-            || fft::fft_radix_p_unscaled::<_, 47, I>(self)
-            || fft::fft_radix_p_unscaled::<_, 53, I>(self)
-            || fft::fft_radix_p_unscaled::<_, 59, I>(self)
-            || fft::fft_radix_p_unscaled::<_, 61, I>(self)
-            || fft::fft_radix_p_unscaled::<_, 67, I>(self)
-            || fft::fft_radix_p_unscaled::<_, 71, I>(self)
-            || fft::fft_radix_p_unscaled::<_, 73, I>(self)
-            || fft::fft_radix_p_unscaled::<_, 79, I>(self)
-            || fft::fft_radix_p_unscaled::<_, 83, I>(self)
-            || fft::fft_radix_p_unscaled::<_, 89, I>(self)
-            || fft::fft_radix_p_unscaled::<_, 97, I>(self)
-            || fft::fft_radix_n_sqrt_unscaled::<_, I>(self)
-        )
-        {
-            fft::dft_unscaled::<_, I>(self)
-        }
+        fft::fft_unscaled::<_, I>(self, None)
     }
 
     fn fft(&mut self)
