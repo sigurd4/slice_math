@@ -69,8 +69,7 @@ pub trait SliceMath<T>: SliceOps<T>
         T: ComplexFloat + Into<Complex<T::Real>>,
         Complex<T::Real>: ComplexFloat<Real = T::Real> + MulAssign + AddAssign;
         
-    #[doc(hidden)]
-    unsafe fn fft_unscaled<const I: bool>(&mut self, temp: Option<&mut [T]>)
+    fn fft_unscaled<const I: bool>(&mut self)
     where
         T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<<T>::Real>> + Sum;
     
@@ -444,29 +443,25 @@ impl<T> SliceMath<T> for [T]
         y
     }
 
-    unsafe fn fft_unscaled<const I: bool>(&mut self, temp: Option<&mut [T]>)
+    fn fft_unscaled<const I: bool>(&mut self)
     where
         T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<<T>::Real>> + Sum
     {
-        fft::fft_unscaled::<_, I>(self, temp)
+        fft::fft_unscaled::<_, I>(self, None)
     }
 
     fn fft(&mut self)
     where
         T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<<T>::Real>> + Sum
     {
-        unsafe {
-            self.fft_unscaled::<false>(None)
-        }
+        self.fft_unscaled::<false>()
     }
 
     fn ifft(&mut self)
     where
         T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<<T>::Real>> + Sum
     {
-        unsafe {
-            self.fft_unscaled::<false>(None)
-        }
+        self.fft_unscaled::<false>();
 
         self.mul_assign_all(<T as From<_>>::from(<Complex<_> as From<_>>::from(<T::Real as NumCast>::from(1.0/self.len() as f64).unwrap())));
     }
