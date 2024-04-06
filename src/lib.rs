@@ -36,7 +36,7 @@ mod tests {
     fn wht()
     {
         let mut a = [19, -1, 11, -9, -7, 13, -15, 5].map(|a| a as f64);
-        a.fwht();
+        a.dwht();
         //a.fwht();
         println!("{:?}", a)
     }
