@@ -404,6 +404,7 @@ where
     for k in 0..len
     {
         let mut wnki = T::one();
+        slice[k] = Zero::zero();
         for i in 0..len
         {
             slice[k] += temp[i]*wnki;
