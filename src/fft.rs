@@ -1,7 +1,9 @@
+use core::mem::MaybeUninit;
 use std::{f64::consts::TAU, iter::Sum, ops::{AddAssign, MulAssign}};
 
 use crate::{util, SliceMath, SliceOps};
-use num::{complex::ComplexFloat, Complex, Float, NumCast, Zero};
+use num::{complex::ComplexFloat, Complex, Float, NumCast, One, Zero};
+use slice_ops::is_power_of;
 
 pub fn fft_unscaled<T, const I: bool>(slice: &mut [T], mut temp: Option<&mut [T]>)
 where
@@ -86,10 +88,11 @@ where
                 let mut w = T::one();
                 for j in 0..m/2
                 {
-                    let t = w*slice[k + j + m/2];
-                    let u = slice[k + j];
-                    slice[k + j] = u + t;
-                    slice[k + j + m/2] = u - t;
+                    let p = slice[k + j];
+                    let q = w*slice[k + j + m/2];
+
+                    slice[k + j] = p + q;
+                    slice[k + j + m/2] = p - q;
                     w *= wm;
                 }
             }
@@ -141,6 +144,44 @@ where
 
     if len % P == 0
     {
+        let w3 = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/P as f64).unwrap()));
+        let w3_p2 = w3*w3;
+
+        if is_power_of(len, P)
+        {
+            // In-place FFT
+
+            slice.digit_rev_permutation(P);
+
+            for s in 0..len.ilog(P)
+            {
+                let m = P.pow(s + 1);
+                let wm = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/m as f64).unwrap()));
+                for k in (0..len).step_by(m)
+                {
+                    let mut w = T::one();
+                    for j in 0..m/P
+                    {
+                        unsafe {
+                            let x1: &mut T = core::mem::transmute(&mut slice[k + j]);
+                            let x2: &mut T = core::mem::transmute(&mut slice[k + j + m/P]);
+                            let x3: &mut T = core::mem::transmute(&mut slice[k + j + m/P*2]);
+                                
+                            let p = *x1 + (*x2 + *x3*w)*w;
+                            let q = *x1 + (*x2*w3 + *x3*w3_p2*w)*w;
+                            let r = *x1 + (*x2*w3_p2 + *x3*w3*w)*w;
+
+                            *x1 = p;
+                            *x2 = q;
+                            *x3 = r;
+                        }
+                        
+                        w *= wm;
+                    }
+                }
+            }
+            return true
+        }
         // Recursive FFT
 
         let mut tempvec;
@@ -157,20 +198,23 @@ where
         partial_fft_unscaled::<_, I>(slice, temp, P);
         let x: Vec<_> = temp.chunks(len/P).collect();
 
-        let w3 = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/P as f64).unwrap()));
-        let w3_p2 = w3*w3;
         let wn = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/len as f64).unwrap()));
-        let mut wn_pn = T::one();
+        let mut w = T::one();
         for k in 0..len/P
         {
-            let p = x[0][k] + x[1][k] + x[2][k];
-            let q = wn_pn*(x[0][k] + x[1][k]*w3 + x[2][k]*w3_p2);
-            let r = wn_pn*wn_pn*(x[0][k] + x[1][k]*w3_p2 + x[2][k]*w3);
+            let x1: &T = &x[0][k];
+            let x2: &T = &x[1][k];
+            let x3: &T = &x[2][k];
+            
+            let p = *x1 + (*x2 + *x3*w)*w;
+            let q = *x1 + (*x2*w3 + *x3*w3_p2*w)*w;
+            let r = *x1 + (*x2*w3_p2 + *x3*w3*w)*w;
 
             slice[k] = p;
             slice[k + len/P] = q;
             slice[k + len/P*2] = r;
-            wn_pn *= wn;
+
+            w *= wn;
         }
         return true;
     }
@@ -187,6 +231,52 @@ where
 
     if len % P == 0
     {
+        if is_power_of(len, P)
+        {
+            // In-place FFT
+
+            slice.digit_rev_permutation(P);
+            
+            let w5 = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/P as f64).unwrap()));
+            let w5_p2 = w5*w5;
+            let w5_p3 = w5_p2*w5;
+            let w5_p4 = w5_p3*w5;
+
+            for s in 0..len.ilog(P)
+            {
+                let m = P.pow(s + 1);
+                let wm = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/m as f64).unwrap()));
+                for k in (0..len).step_by(m)
+                {
+                    let mut w = T::one();
+                    for j in 0..m/P
+                    {
+                        unsafe {
+                            let x1: &mut T = core::mem::transmute(&mut slice[k + j]);
+                            let x2: &mut T = core::mem::transmute(&mut slice[k + j + m/P]);
+                            let x3: &mut T = core::mem::transmute(&mut slice[k + j + m/P*2]);
+                            let x4: &mut T = core::mem::transmute(&mut slice[k + j + m/P*3]);
+                            let x5: &mut T = core::mem::transmute(&mut slice[k + j + m/P*4]);
+
+                            let p = *x1 + (*x2 + (*x3 + (*x4 + *x5*w)*w)*w)*w;
+                            let q = *x1 + (*x2*w5 + (*x3*w5_p2 + (*x4*w5_p3 + *x5*w5_p4*w)*w)*w)*w;
+                            let r = *x1 + (*x2*w5_p2 + (*x3*w5_p4 + (*x4*w5 + *x5*w5_p3*w)*w)*w)*w;
+                            let s = *x1 + (*x2*w5_p3 + (*x3*w5 + (*x4*w5_p4 + *x5*w5_p2*w)*w)*w)*w;
+                            let t = *x1 + (*x3*w5_p4 + (*x3*w5_p3 + (*x4*w5_p2 + *x5*w5*w)*w)*w)*w;
+
+                            *x1 = p;
+                            *x2 = q;
+                            *x3 = r;
+                            *x4 = s;
+                            *x5 = t;
+                        }
+                        
+                        w *= wm;
+                    }
+                }
+            }
+            return true
+        }
         // Recursive FFT
 
         let mut tempvec;
@@ -208,21 +298,27 @@ where
         let w5_p3 = w5_p2*w5;
         let w5_p4 = w5_p3*w5;
         let wn = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/len as f64).unwrap()));
-        let mut wn_pk = T::one();
+        let mut w = T::one();
         for k in 0..len/P
         {
-            let p = x[0][k] + x[1][k] + x[2][k] + x[3][k] + x[4][k];
-            let q = wn_pk*(x[0][k] + x[1][k]*w5 + x[2][k]*w5_p2 + x[3][k]*w5_p3 + x[4][k]*w5_p4);
-            let r = wn_pk*wn_pk*(x[0][k] + x[1][k]*w5_p2 + x[2][k]*w5_p4 + x[3][k]*w5 + x[4][k]*w5_p3);
-            let s = wn_pk*wn_pk*wn_pk*(x[0][k] + x[1][k]*w5_p3 + x[2][k]*w5 + x[3][k]*w5_p4 + x[4][k]*w5_p2);
-            let t = wn_pk*wn_pk*wn_pk*wn_pk*(x[0][k] + x[1][k]*w5_p4 + x[2][k]*w5_p3 + x[3][k]*w5_p2 + x[4][k]*w5);
+            let x1: &T = &x[0][k];
+            let x2: &T = &x[1][k];
+            let x3: &T = &x[2][k];
+            let x4: &T = &x[3][k];
+            let x5: &T = &x[4][k];
+            
+            let p = *x1 + (*x2 + (*x3 + (*x4 + *x5*w)*w)*w)*w;
+            let q = *x1 + (*x2*w5 + (*x3*w5_p2 + (*x4*w5_p3 + *x5*w5_p4*w)*w)*w)*w;
+            let r = *x1 + (*x2*w5_p2 + (*x3*w5_p4 + (*x4*w5 + *x5*w5_p3*w)*w)*w)*w;
+            let s = *x1 + (*x2*w5_p3 + (*x3*w5 + (*x4*w5_p4 + *x5*w5_p2*w)*w)*w)*w;
+            let t = *x1 + (*x3*w5_p4 + (*x3*w5_p3 + (*x4*w5_p2 + *x5*w5*w)*w)*w)*w;
 
             slice[k] = p;
             slice[k + len/P] = q;
             slice[k + len/P*2] = r;
             slice[k + len/P*3] = s;
             slice[k + len/P*4] = t;
-            wn_pk *= wn;
+            w *= wn;
         }
         return true;
     }
@@ -239,6 +335,60 @@ where
 
     if len % P == 0
     {
+        if is_power_of(len, P)
+        {
+            // In-place FFT
+
+            slice.digit_rev_permutation(P);
+            
+            let w7 = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/P as f64).unwrap()));
+            let w7_p2 = w7*w7;
+            let w7_p3 = w7_p2*w7;
+            let w7_p4 = w7_p3*w7;
+            let w7_p5 = w7_p4*w7;
+            let w7_p6 = w7_p5*w7;
+
+            for s in 0..len.ilog(P)
+            {
+                let m = P.pow(s + 1);
+                let wm = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/m as f64).unwrap()));
+                for k in (0..len).step_by(m)
+                {
+                    let mut w = T::one();
+                    for j in 0..m/P
+                    {
+                        unsafe {
+                            let x1: &mut T = core::mem::transmute(&mut slice[k + j]);
+                            let x2: &mut T = core::mem::transmute(&mut slice[k + j + m/P]);
+                            let x3: &mut T = core::mem::transmute(&mut slice[k + j + m/P*2]);
+                            let x4: &mut T = core::mem::transmute(&mut slice[k + j + m/P*3]);
+                            let x5: &mut T = core::mem::transmute(&mut slice[k + j + m/P*4]);
+                            let x6: &mut T = core::mem::transmute(&mut slice[k + j + m/P*5]);
+                            let x7: &mut T = core::mem::transmute(&mut slice[k + j + m/P*6]);
+                            
+                            let p = *x1 + (*x2 + (*x3 + (*x4 + (*x5 + (*x6 + *x7*w)*w)*w)*w)*w)*w;
+                            let q = *x1 + (*x2*w7 + (*x3*w7_p2 + (*x4*w7_p3 + (*x5*w7_p4 + (*x6*w7_p5 + *x7*w7_p6*w)*w)*w)*w)*w)*w;
+                            let r = *x1 + (*x2*w7_p2 + (*x3*w7_p4 + (*x4*w7_p6 + (*x5*w7 + (*x6*w7_p3 + *x7*w7_p5*w)*w)*w)*w)*w)*w;
+                            let s = *x1 + (*x2*w7_p3 + (*x3*w7_p6 + (*x4*w7_p2 + (*x5*w7_p5 + (*x6*w7 + *x7*w7_p4*w)*w)*w)*w)*w)*w;
+                            let t = *x1 + (*x2*w7_p4 + (*x3*w7 + (*x4*w7_p5 + (*x5*w7_p2 + (*x6*w7_p6 + *x7*w7_p3*w)*w)*w)*w)*w)*w;
+                            let u = *x1 + (*x2*w7_p5 + (*x3*w7_p3 + (*x4*w7 + (*x5*w7_p6 + (*x6*w7_p4 + *x7*w7_p2*w)*w)*w)*w)*w)*w;
+                            let v = *x1 + (*x2*w7_p6 + (*x3*w7_p5 + (*x4*w7_p4 + (*x5*w7_p3 + (*x6*w7_p2 + *x7*w7*w)*w)*w)*w)*w)*w;
+
+                            *x1 = p;
+                            *x2 = q;
+                            *x3 = r;
+                            *x4 = s;
+                            *x5 = t;
+                            *x6 = u;
+                            *x7 = v;
+                        }
+                        
+                        w *= wm;
+                    }
+                }
+            }
+            return true
+        }
         // Recursive FFT
 
         let mut tempvec;
@@ -262,16 +412,24 @@ where
         let w7_p5 = w7_p4*w7;
         let w7_p6 = w7_p5*w7;
         let wn = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/len as f64).unwrap()));
-        let mut wn_pk = T::one();
+        let mut w = T::one();
         for k in 0..len/P
         {
-            let p = x[0][k] + x[1][k] + x[2][k] + x[3][k] + x[4][k] + x[5][k] + x[6][k];
-            let q = wn_pk*(x[0][k] + x[1][k]*w7 + x[2][k]*w7_p2 + x[3][k]*w7_p3 + x[4][k]*w7_p4 + x[5][k]*w7_p5 + x[6][k]*w7_p6);
-            let r = wn_pk*wn_pk*(x[0][k] + x[1][k]*w7_p2 + x[2][k]*w7_p4 + x[3][k]*w7_p6 + x[4][k]*w7 + x[5][k]*w7_p3 + x[6][k]*w7_p5);
-            let s = wn_pk*wn_pk*wn_pk*(x[0][k] + x[1][k]*w7_p3 + x[2][k]*w7_p6 + x[3][k]*w7_p2 + x[4][k]*w7_p5 + x[5][k]*w7 + x[6][k]*w7_p4);
-            let t = wn_pk*wn_pk*wn_pk*wn_pk*(x[0][k] + x[1][k]*w7_p4 + x[2][k]*w7 + x[3][k]*w7_p5 + x[4][k]*w7_p2 + x[5][k]*w7_p6 + x[6][k]*w7_p3);
-            let u = wn_pk*wn_pk*wn_pk*wn_pk*wn_pk*(x[0][k] + x[1][k]*w7_p5 + x[2][k]*w7_p3 + x[3][k]*w7 + x[4][k]*w7_p6 + x[5][k]*w7_p4 + x[6][k]*w7_p2);
-            let v = wn_pk*wn_pk*wn_pk*wn_pk*wn_pk*wn_pk*(x[0][k] + x[1][k]*w7_p6 + x[2][k]*w7_p5 + x[3][k]*w7_p4 + x[4][k]*w7_p3 + x[5][k]*w7_p2 + x[6][k]*w7);
+            let x1: &T = &x[0][k];
+            let x2: &T = &x[1][k];
+            let x3: &T = &x[2][k];
+            let x4: &T = &x[3][k];
+            let x5: &T = &x[4][k];
+            let x6: &T = &x[5][k];
+            let x7: &T = &x[6][k];
+            
+            let p = *x1 + (*x2 + (*x3 + (*x4 + (*x5 + (*x6 + *x7*w)*w)*w)*w)*w)*w;
+            let q = *x1 + (*x2*w7 + (*x3*w7_p2 + (*x4*w7_p3 + (*x5*w7_p4 + (*x6*w7_p5 + *x7*w7_p6*w)*w)*w)*w)*w)*w;
+            let r = *x1 + (*x2*w7_p2 + (*x3*w7_p4 + (*x4*w7_p6 + (*x5*w7 + (*x6*w7_p3 + *x7*w7_p5*w)*w)*w)*w)*w)*w;
+            let s = *x1 + (*x2*w7_p3 + (*x3*w7_p6 + (*x4*w7_p2 + (*x5*w7_p5 + (*x6*w7 + *x7*w7_p4*w)*w)*w)*w)*w)*w;
+            let t = *x1 + (*x2*w7_p4 + (*x3*w7 + (*x4*w7_p5 + (*x5*w7_p2 + (*x6*w7_p6 + *x7*w7_p3*w)*w)*w)*w)*w)*w;
+            let u = *x1 + (*x2*w7_p5 + (*x3*w7_p3 + (*x4*w7 + (*x5*w7_p6 + (*x6*w7_p4 + *x7*w7_p2*w)*w)*w)*w)*w)*w;
+            let v = *x1 + (*x2*w7_p6 + (*x3*w7_p5 + (*x4*w7_p4 + (*x5*w7_p3 + (*x6*w7_p2 + *x7*w7*w)*w)*w)*w)*w)*w;
 
             slice[k] = p;
             slice[k + len/P] = q;
@@ -280,7 +438,8 @@ where
             slice[k + len/P*4] = t;
             slice[k + len/P*5] = u;
             slice[k + len/P*6] = v;
-            wn_pk *= wn;
+
+            w *= wn;
         }
         return true;
     }
@@ -296,6 +455,66 @@ where
 
     if len % P == 0
     {
+        if is_power_of(len, P)
+        {
+            // In-place FFT
+
+            slice.digit_rev_permutation(P);
+            
+            let wp: [_; P] = {
+                core::array::from_fn(|i| {
+                    if i == 0
+                    {
+                        One::one()
+                    }
+                    else
+                    {
+                        <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}*i as f64/P as f64).unwrap()))
+                    }
+                })
+            };
+
+            let mut x: [&mut T; P] = unsafe {MaybeUninit::uninit().assume_init()};
+            let mut y: [T; P] = [T::zero(); P];
+            
+            for s in 0..len.ilog(P)
+            {
+                let m = P.pow(s + 1);
+                let wm = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/m as f64).unwrap()));
+                for k in (0..len).step_by(m)
+                {
+                    let mut w = T::one();
+                    for j in 0..m/P
+                    {
+                        for i in 0..P
+                        {
+                            x[i] = unsafe {
+                                core::mem::transmute(&mut slice[k + j + m/P*i])
+                            }
+                        }
+
+                        for i in 0..P
+                        {
+                            y[i] = T::zero();
+                            for j in (1..P).rev()
+                            {
+                                y[i] += *x[j]*wp[(j*i) % P];
+                                y[i] *= w;
+                            }
+                            y[i] += *x[0];
+                        }
+                        
+                        for i in 0..P
+                        {
+                            *x[i] = y[i]
+                        }
+                        
+                        w *= wm;
+                    }
+                }
+            }
+            return true
+        }
         // Recursive FFT
         
         let mut tempvec;
@@ -312,20 +531,42 @@ where
         partial_fft_unscaled::<_, I>(slice, temp, P);
         let x: Vec<_> = temp.chunks(len/P).collect();
 
+        let wp: [_; P] = {
+            core::array::from_fn(|i| {
+                if i == 0
+                {
+                    One::one()
+                }
+                else
+                {
+                    <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}*i as f64/P as f64).unwrap()))
+                }
+            })
+        };
+        let mut y: [T; P] = [T::zero(); P];
+
         let wn = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/len as f64).unwrap()));
-        let mut wn_pk = T::one();
+        let mut w = T::one();
         let m = len/P;
-        for k in 0..len
+        for k in 0..m
         {
-            let mut e = T::one();
-            slice[k] = x.iter()
-                .map(|x| {
-                    let x = x[k % m];
-                    let y = x*e;
-                    e *= wn_pk;
-                    y
-                }).sum::<T>();
-            wn_pk *= wn;
+            for i in 0..P
+            {
+                y[i] = T::zero();
+                for j in (1..P).rev()
+                {
+                    y[i] += x[j][k]*wp[(j*i) % P];
+                    y[i] *= w;
+                }
+                y[i] += x[0][k];
+            }
+            
+            for i in 0..P
+            {
+                slice[k + m*i] = y[i]
+            }
+            
+            w *= wn;
         }
         return true;
     }
@@ -338,10 +579,69 @@ where
 {
     let len = slice.len();
     let p = {
-        util::closest_prime(1 << ((len.ilog2() + 1) / 2))
+        util::closest_mod0_of(1 << ((len.ilog2() + 1) / 2), len)
     };
-    if let Some(p) = p && len % p == 0
+    if let Some(p) = p
     {
+        assert!(len % p == 0);
+        let wp: Vec<_> = (0..p).map(|i| {
+                if i == 0
+                {
+                    One::one()
+                }
+                else
+                {
+                    <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}*i as f64/p as f64).unwrap()))
+                }
+            }).collect();
+        let mut y = vec![T::zero(); p];
+
+        if is_power_of(len, p)
+        {
+            // In-place FFT
+
+            slice.digit_rev_permutation(p);
+
+            let mut x: Box<[&mut T]> = unsafe {Box::new_uninit_slice(p).assume_init()};
+            
+            for s in 0..len.ilog(p)
+            {
+                let m = p.pow(s + 1);
+                let wm = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/m as f64).unwrap()));
+                for k in (0..len).step_by(m)
+                {
+                    let mut w = T::one();
+                    for j in 0..m/p
+                    {
+                        for i in 0..p
+                        {
+                            x[i] = unsafe {
+                                core::mem::transmute(&mut slice[k + j + m/p*i])
+                            }
+                        }
+
+                        for i in 0..p
+                        {
+                            y[i] = T::zero();
+                            for j in (1..p).rev()
+                            {
+                                y[i] += *x[j]*wp[(j*i) % p];
+                                y[i] *= w;
+                            }
+                            y[i] += *x[0];
+                        }
+                        
+                        for i in 0..p
+                        {
+                            *x[i] = y[i]
+                        }
+                        
+                        w *= wm;
+                    }
+                }
+            }
+            return true
+        }
         // Recursive FFT
 
         let mut tempvec;
@@ -359,19 +659,27 @@ where
         let x: Vec<_> = temp.chunks(len/p).collect();
 
         let wn = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/len as f64).unwrap()));
-        let mut wn_pk = T::one();
+        let mut w = T::one();
         let m = len/p;
-        for k in 0..len
+        for k in 0..m
         {
-            let mut e = T::one();
-            slice[k] = x.iter()
-                .map(|x| {
-                    let x = x[k % m];
-                    let y = x*e;
-                    e *= wn_pk;
-                    y
-                }).sum::<T>();
-            wn_pk *= wn;
+            for i in 0..p
+            {
+                y[i] = T::zero();
+                for j in (1..p).rev()
+                {
+                    y[i] += x[j][k]*wp[(j*i) % p];
+                    y[i] *= w;
+                }
+                y[i] += x[0][k];
+            }
+            
+            for i in 0..p
+            {
+                slice[k + m*i] = y[i]
+            }
+            
+            w *= wn;
         }
         return true;
     }

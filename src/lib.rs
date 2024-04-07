@@ -38,8 +38,10 @@ mod tests {
     #[test]
     fn fft()
     {
-        let mut a = [Complex::from(0.0); 120];
+        let mut a = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0].map(Complex::from);
         a.fft();
+
+        println!("{:?}", a)
     }
     
     #[test]
@@ -120,15 +122,17 @@ mod tests {
             let mut t: Box<[_; N]> = unsafe {Box::new_uninit().assume_init()};
             for n in 0..N
             {
+                const O: usize = 1024;
+
                 let mut x = vec![Complex::from(1.0); n];
                 let t0 = SystemTime::now();
-                for _ in 0..1024
+                for _ in 0..O
                 {
                     f(&mut x);
                 }
                 let dt = SystemTime::now().duration_since(t0).unwrap();
                 println!("Done N = {}", n);
-                t[n] = dt.as_secs_f32()
+                t[n] = dt.as_secs_f32()/O as f32
             }
             t
         });
