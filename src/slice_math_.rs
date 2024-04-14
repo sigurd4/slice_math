@@ -64,6 +64,28 @@ pub trait SliceMath<T>: SliceOps<T>
         Complex<Rhs::Real>: From<Rhs> + AddAssign + MulAssign,
         C: FromIterator<<T as Mul<Rhs>>::Output>;
         
+    fn cconvolve_direct<Rhs, C>(&self, rhs: &[Rhs]) -> C
+    where
+        T: Mul<Rhs, Output: AddAssign + Zero> + Copy,
+        Rhs: Copy,
+        C: FromIterator<<T as Mul<Rhs>>::Output>;
+    fn cconvolve_real_fft<Rhs, C>(&self, rhs: &[Rhs]) -> C
+    where
+        T: Float + Copy,
+        Rhs: Float + Copy,
+        Complex<T>: MulAssign + AddAssign + ComplexFloat<Real = T> + Mul<Complex<Rhs>, Output: ComplexFloat<Real: Float>>,
+        Complex<Rhs>: MulAssign + AddAssign + ComplexFloat<Real = Rhs>,
+        <Complex<T> as Mul<Complex<Rhs>>>::Output: ComplexFloat<Real: Float> + Into<Complex<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>>,
+        Complex<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>: MulAssign + AddAssign + ComplexFloat<Real = <<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>,
+        C: FromIterator<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>;
+    fn cconvolve_fft<Rhs, C>(&self, rhs: &[Rhs]) -> C
+    where
+        T: ComplexFloat + Mul<Rhs, Output: ComplexFloat + From<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real> + 'static>,
+        Rhs: ComplexFloat,
+        Complex<T::Real>: From<T> + AddAssign + MulAssign + Mul<Complex<Rhs::Real>, Output: ComplexFloat<Real = <<T as Mul<Rhs>>::Output as ComplexFloat>::Real> + MulAssign + AddAssign + From<Complex<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real>> + Sum + 'static>,
+        Complex<Rhs::Real>: From<Rhs> + AddAssign + MulAssign,
+        C: FromIterator<<T as Mul<Rhs>>::Output>;
+        
     fn dtft(&self, omega: T::Real) -> Complex<T::Real>
     where
         T: ComplexFloat + Into<Complex<T::Real>>,
@@ -412,6 +434,97 @@ impl<T> SliceMath<T> for [T]
         y.ifft();
 
         y.truncate(y_len);
+        
+        y.into_iter()
+            .map(|y| {
+                if let Some(y) = <dyn Any>::downcast_ref::<<T as Mul<Rhs>>::Output>(&y as &dyn Any)
+                {
+                    *y
+                }
+                else
+                {
+                    y.re().into()
+                }
+            })
+            .collect()
+    }
+    fn cconvolve_direct<Rhs, C>(&self, rhs: &[Rhs]) -> C
+    where
+        T: Mul<Rhs, Output: AddAssign + Zero> + Copy,
+        Rhs: Copy,
+        C: FromIterator<<T as Mul<Rhs>>::Output>
+    {
+        let y_len = self.len().max(rhs.len());
+        let x_len = self.len().min(rhs.len());
+
+        (0..y_len).map(|n| {
+            let mut y = Zero::zero();
+            for k in 0..x_len
+            {
+                y += self[n % self.len()]*rhs[(n + rhs.len() - k) % rhs.len()]
+            }
+            y
+        }).collect()
+    }
+    fn cconvolve_real_fft<Rhs, C>(&self, rhs: &[Rhs]) -> C
+    where
+        T: Float + Copy,
+        Rhs: Float + Copy,
+        Complex<T>: MulAssign + AddAssign + ComplexFloat<Real = T> + Mul<Complex<Rhs>, Output: ComplexFloat<Real: Float>>,
+        Complex<Rhs>: MulAssign + AddAssign + ComplexFloat<Real = Rhs>,
+        <Complex<T> as Mul<Complex<Rhs>>>::Output: ComplexFloat<Real: Float> + Into<Complex<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>>,
+        Complex<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>: MulAssign + AddAssign + ComplexFloat<Real = <<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>,
+        C: FromIterator<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>
+    {
+        let len = self.len().max(rhs.len());
+
+        let mut x: Vec<T> = self.to_vec();
+        let mut h: Vec<Rhs> = rhs.to_vec();
+        x.resize(len, T::zero());
+        h.resize(len, Rhs::zero());
+
+        let mut x_f = vec![Complex::zero(); len/2 + 1];
+        let mut h_f = vec![Complex::zero(); len/2 + 1];
+        x.real_fft(&mut x_f);
+        h.real_fft(&mut h_f);
+
+        let y_f: Vec<_> = x_f.into_iter()
+            .zip(h_f.into_iter())
+            .map(|(x_f, h_f)| (x_f*h_f).into())
+            .collect();
+
+        let mut y = vec![Zero::zero(); len];
+        y.real_ifft(&y_f);
+        
+        y.into_iter()
+            .collect()
+    }
+    fn cconvolve_fft<Rhs, C>(&self, rhs: &[Rhs]) -> C
+    where
+        T: ComplexFloat + Mul<Rhs, Output: ComplexFloat + From<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real> + 'static>,
+        Rhs: ComplexFloat,
+        Complex<T::Real>: From<T> + AddAssign + MulAssign + Mul<Complex<Rhs::Real>, Output: ComplexFloat<Real = <<T as Mul<Rhs>>::Output as ComplexFloat>::Real> + MulAssign + AddAssign + From<Complex<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real>> + Sum + 'static>,
+        Complex<Rhs::Real>: From<Rhs> + AddAssign + MulAssign,
+        C: FromIterator<<T as Mul<Rhs>>::Output>
+    {
+        let len = self.len().max(rhs.len());
+
+        let mut x: Vec<Complex<T::Real>> = self.iter()
+            .map(|&x| x.into())
+            .collect();
+        let mut h: Vec<Complex<Rhs::Real>> = rhs.iter()
+            .map(|&h| h.into())
+            .collect();
+        x.resize(len, Zero::zero());
+        h.resize(len, Zero::zero());
+        x.fft();
+        h.fft();
+
+        let mut y: Vec<_> = x.into_iter()
+            .zip(h.into_iter())
+            .map(|(x, h)| x*h)
+            .collect();
+        y.ifft();
         
         y.into_iter()
             .map(|y| {
