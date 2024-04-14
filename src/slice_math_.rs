@@ -411,8 +411,6 @@ impl<T> SliceMath<T> for [T]
             .collect();
         y.ifft();
 
-        y.reverse();
-
         y.truncate(y_len);
         
         y.into_iter()
@@ -463,7 +461,7 @@ impl<T> SliceMath<T> for [T]
     where
         T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<<T>::Real>> + Sum
     {
-        self.fft_unscaled::<false>();
+        self.fft_unscaled::<true>();
 
         self.mul_assign_all(<T as From<_>>::from(<Complex<_> as From<_>>::from(<T::Real as NumCast>::from(1.0/self.len() as f64).unwrap())));
     }
