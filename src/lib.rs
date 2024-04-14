@@ -84,6 +84,35 @@ mod tests {
     }
 
     #[test]
+    fn cconv()
+    {
+        const N: usize = 1024;
+        const M: usize = 20;
+
+        let x: [_; N] = core::array::from_fn(|i| ((i*136 + 50*i*i + 13) % 100) as f64/100.0/(i + 1) as f64);
+        let z: [_; M] = core::array::from_fn(|i| ((i*446 + 12*i*i + 59) % 100) as f64/100.0);
+
+        let y1: Vec<_> = x.cconvolve_direct(&z);
+        let y2: Vec<_> = x.cconvolve_fft(&z);
+        
+        plot::plot_curves::<N, _>("e(i)", "plots/cconv_error.png",
+            [
+                &core::array::from_fn(|i| i as f32),
+                &core::array::from_fn(|i| i as f32),
+            ],
+            [
+                &core::array::from_fn(|i| y1[i] as f32),
+                &core::array::from_fn(|i| y2[i] as f32),
+            ]).unwrap();
+
+        let e = y1.into_iter()
+            .zip(y2)
+            .map(|(y1, y2)| (y1 - y2).abs())
+            .sum::<f64>()/(N.max(M)) as f64;
+        println!("{:?}", e)
+    }
+
+    #[test]
     fn conv_accuracy()
     {
         const L: usize = 1024;

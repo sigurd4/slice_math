@@ -448,20 +448,24 @@ impl<T> SliceMath<T> for [T]
             })
             .collect()
     }
-    fn cconvolve_direct<Rhs, C>(&self, rhs: &[Rhs]) -> C
+    fn cconvolve_direct<Rhs, C>(&self, mut rhs: &[Rhs]) -> C
     where
         T: Mul<Rhs, Output: AddAssign + Zero> + Copy,
         Rhs: Copy,
         C: FromIterator<<T as Mul<Rhs>>::Output>
     {
         let y_len = self.len().max(rhs.len());
-        let x_len = self.len().min(rhs.len());
 
         (0..y_len).map(|n| {
             let mut y = Zero::zero();
-            for k in 0..x_len
+            for k in 0..y_len
             {
-                y += self[n % self.len()]*rhs[(n + rhs.len() - k) % rhs.len()]
+                let i = k;
+                let j = (n + y_len - k) % y_len;
+                if i < self.len() && j < rhs.len()
+                {
+                    y += self[i]*rhs[j]
+                }
             }
             y
         }).collect()
