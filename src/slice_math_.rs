@@ -411,6 +411,8 @@ impl<T> SliceMath<T> for [T]
             .collect();
         y.ifft();
 
+        y.reverse();
+
         y.truncate(y_len);
         
         y.into_iter()

@@ -62,6 +62,60 @@ mod tests {
         println!("{:?}", a)
     }
 
+    #[test]
+    fn fft_accuracy()
+    {
+        const L: usize = 1024;
+
+        let mut x1: Vec<_> = (0..L).map(|i| Complex::from(((i*136 + 50*i*i + 13) % 100) as f64/100.0)).collect();
+        let mut x2 = x1.clone();
+
+        x1.fft();
+        /*let fft = FftPlanner::new()
+            .plan_fft_forward(L);
+        fft.process(&mut x2);*/
+        fft::dft_unscaled::<_, false>(&mut x2, &mut None);
+
+        let e = x1.iter()
+            .zip(x2)
+            .map(|(x1, x2)| (x1 - x2).norm())
+            .sum::<f64>()/L as f64;
+        println!("{:?}", e)
+    }
+
+    #[test]
+    fn conv_accuracy()
+    {
+        const L: usize = 1024;
+
+        let x: Vec<_> = (0..L).map(|i| ((i*136 + 50*i*i + 13) % 100) as f64/100.0/(i + 1) as f64).collect();
+        
+        let z: Vec<_> = (0..20).map(|i| ((i*446 + 12*i*i + 59) % 100) as f64/100.0).collect();
+
+        let y1: Vec<_> = x.convolve_fft(&z);
+        let y2: Vec<_> = x.convolve_direct(&z);
+        let err: Vec<_> = y1.iter()
+            .zip(y2.iter())
+            .map(|(y1, y2)| y1 - y2)
+            .collect();
+
+        plot::plot_curves::<L, _>("e(i)", "plots/conv_error.png",
+            [
+                &core::array::from_fn(|i| i as f32),
+                &core::array::from_fn(|i| i as f32),
+            ],
+            [
+                &core::array::from_fn(|i| y1[i] as f32),
+                &core::array::from_fn(|i| y2[i] as f32),
+            ]).unwrap();
+
+        let e = y1.into_iter()
+            .zip(y2)
+            .map(|(y1, y2)| (y1 - y2).abs())
+            .sum::<f64>()/L as f64;
+        println!("{:?}", e)
+    }
+
     #[cfg(feature = "ndarray")]
     #[test]
     fn test_polyfit()
