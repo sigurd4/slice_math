@@ -43,6 +43,16 @@ mod tests {
 
         println!("{:?}", a)
     }
+
+    #[test]
+    fn detrend()
+    {
+        let mut x = [0.0, 1.0, 2.0, 3.0, -5.0, 5.0, 6.0, 7.0, 8.0, 9.0];
+
+        x.detrend(1);
+
+        println!("{:?}", x)
+    }
     
     #[test]
     fn dst()
@@ -154,7 +164,7 @@ mod tests {
         let x = [4.0, -1.0, 6.0, 7.0];
         let y = x.map(|x| p.rpolynomial(x));
 
-        let p = x.rpolyfit(&y, 2);
+        let p: Vec<_> = x.rpolyfit(&y, 2);
 
         println!("{:?}", p);
     }

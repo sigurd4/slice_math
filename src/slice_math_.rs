@@ -273,11 +273,27 @@ pub trait SliceMath<T>: SliceOps<T>
         S: FromIterator<Complex<<T as ComplexFloat>::Real>>;
         
     #[cfg(feature = "ndarray")]
-    fn polyfit(&self, y: &[T], n: usize) -> Vec<T>
+    fn lin_fit(&self, y: &[T]) -> [T; 2]
     where
         T: ndarray_linalg::Lapack;
     #[cfg(feature = "ndarray")]
-    fn rpolyfit(&self, y: &[T], n: usize) -> Vec<T>
+    fn rlin_fit(&self, y: &[T]) -> [T; 2]
+    where
+        T: ndarray_linalg::Lapack;
+        
+    #[cfg(feature = "ndarray")]
+    fn polyfit<S>(&self, y: &[T], n: usize) -> S
+    where
+        T: ndarray_linalg::Lapack,
+        S: FromIterator<T>;
+    #[cfg(feature = "ndarray")]
+    fn rpolyfit<S>(&self, y: &[T], n: usize) -> S
+    where
+        T: ndarray_linalg::Lapack,
+        S: FromIterator<T>;
+        
+    #[cfg(feature = "ndarray")]
+    fn detrend(&mut self, n: usize)
     where
         T: ndarray_linalg::Lapack;
         
@@ -1444,20 +1460,43 @@ impl<T> SliceMath<T> for [T]
         roots.into_iter()
             .collect()
     }
-    
+
     #[cfg(feature = "ndarray")]
-    fn polyfit(&self, y: &[T], n: usize) -> Vec<T>
+    fn lin_fit(&self, y: &[T]) -> [T; 2]
     where
         T: ndarray_linalg::Lapack
     {
-        let mut p = self.rpolyfit(y, n);
-        p.reverse();
-        p
+        self.polyfit::<Vec<_>>(y, 1)
+            .try_into()
+            .unwrap()
     }
+    
     #[cfg(feature = "ndarray")]
-    fn rpolyfit(&self, y: &[T], n: usize) -> Vec<T>
+    fn rlin_fit(&self, y: &[T]) -> [T; 2]
     where
         T: ndarray_linalg::Lapack
+    {
+        self.rpolyfit::<Vec<_>>(y, 1)
+            .try_into()
+            .unwrap()
+    }
+    
+    #[cfg(feature = "ndarray")]
+    fn polyfit<S>(&self, y: &[T], n: usize) -> S
+    where
+        T: ndarray_linalg::Lapack,
+        S: FromIterator<T>
+    {
+        let mut p: Vec<_> = self.rpolyfit(y, n);
+        p.reverse();
+        p.into_iter()
+            .collect()
+    }
+    #[cfg(feature = "ndarray")]
+    fn rpolyfit<S>(&self, y: &[T], n: usize) -> S
+    where
+        T: ndarray_linalg::Lapack,
+        S: FromIterator<T>
     {
         use ndarray::ArrayView2;
         use ndarray_linalg::{Solve, QR};
@@ -1471,7 +1510,22 @@ impl<T> SliceMath<T> for [T]
         let p = r.solve(&qtmy.column(0))
             .unwrap();
 
-        p.to_vec()
+        p.into_iter()
+            .collect()
+    }
+
+    #[cfg(feature = "ndarray")]
+    fn detrend(&mut self, n: usize)
+    where
+        T: ndarray_linalg::Lapack + NumCast
+    {
+        let x: Vec<_> = (0..self.len()).map(|i| T::from(i).unwrap())
+            .collect();
+        let p: Vec<_> = x.rpolyfit(self, n);
+        for i in 0..self.len()
+        {
+            self[i] -= p.rpolynomial(x[i])
+        }
     }
     
     #[cfg(feature = "ndarray")]
