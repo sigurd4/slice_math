@@ -1324,7 +1324,7 @@ impl<T> SliceMath<T> for [T]
     {
         let s = self.trim_zeros_back();
         let l = s.len();
-        if l < 1
+        if l <= 1
         {
             return ndarray::Array2::from_shape_fn((0, 0), |_| Zero::zero())
         }
@@ -1351,7 +1351,7 @@ impl<T> SliceMath<T> for [T]
     {
         let s = self.trim_zeros_front();
         let l = s.len();
-        if l < 1
+        if l <= 1
         {
             return ndarray::Array2::from_shape_fn((0, 0), |_| Zero::zero())
         }
@@ -1360,8 +1360,11 @@ impl<T> SliceMath<T> for [T]
         let mut i = n;
         loop
         {
-            c[(n - i, n - 1)] = -s[i];
-            c[(n - i, n - 1)] /= s[0];
+            if n > 0
+            {
+                c[(n - i, n - 1)] = -s[i];
+                c[(n - i, n - 1)] /= s[0];
+            }
             i -= 1;
             if i > 0
             {
