@@ -1360,11 +1360,8 @@ impl<T> SliceMath<T> for [T]
         let mut i = n;
         loop
         {
-            if n > 0
-            {
-                c[(n - i, n - 1)] = -s[i];
-                c[(n - i, n - 1)] /= s[0];
-            }
+            c[(n - i, n - 1)] = -s[i];
+            c[(n - i, n - 1)] /= s[0];
             i -= 1;
             if i > 0
             {
@@ -1402,6 +1399,12 @@ impl<T> SliceMath<T> for [T]
     {
         use ndarray_linalg::eig::EigVals;
 
+        if self.trim_zeros_front().len() <= 1
+        {
+            return core::iter::empty()
+                .collect()
+        }
+
         let c = self.companion_matrix();
         let mut roots = EigVals::eigvals(&c).unwrap();
         let len = roots.len();
@@ -1436,6 +1439,12 @@ impl<T> SliceMath<T> for [T]
         S: FromIterator<Complex<<T as ComplexFloat>::Real>>
     {
         use ndarray_linalg::EigVals;
+
+        if self.trim_zeros_front().len() <= 1
+        {
+            return core::iter::empty()
+                .collect()
+        }
 
         let c = self.rcompanion_matrix();
         let mut roots = EigVals::eigvals(&c).unwrap();
