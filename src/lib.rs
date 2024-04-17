@@ -55,11 +55,11 @@ mod tests {
     }
     
     #[test]
-    fn dst()
+    fn dct()
     {
-        let mut a: [f64; _] = [1.0];
+        let mut a: [f64; _] = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
 
-        a.dct_iv();
+        a.dct_i();
         println!("{:?}", a);
     }
 
