@@ -53,15 +53,16 @@ pub trait SliceMath<T>: SliceOps<T>
         Complex<T>: MulAssign + AddAssign + ComplexFloat<Real = T> + Mul<Complex<Rhs>, Output: ComplexFloat<Real: Float>>,
         Complex<Rhs>: MulAssign + AddAssign + ComplexFloat<Real = Rhs>,
         <Complex<T> as Mul<Complex<Rhs>>>::Output: ComplexFloat<Real: Float> + Into<Complex<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>>,
-        Complex<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>: MulAssign + AddAssign + ComplexFloat<Real = <<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>,
+        Complex<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>: MulAssign + AddAssign + MulAssign<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real> + ComplexFloat<Real = <<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>,
         C: FromIterator<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>;
         
     fn convolve_fft<Rhs, C>(&self, rhs: &[Rhs]) -> C
     where
-        T: ComplexFloat + Mul<Rhs, Output: ComplexFloat + From<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real> + 'static>,
-        Rhs: ComplexFloat,
-        Complex<T::Real>: From<T> + AddAssign + MulAssign + Mul<Complex<Rhs::Real>, Output: ComplexFloat<Real = <<T as Mul<Rhs>>::Output as ComplexFloat>::Real> + MulAssign + AddAssign + From<Complex<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real>> + Sum + 'static>,
-        Complex<Rhs::Real>: From<Rhs> + AddAssign + MulAssign,
+        T: ComplexFloat + Mul<Rhs, Output: ComplexFloat<Real: Into<<T as Mul<Rhs>>::Output>> + 'static> + Into<Complex<T::Real>>,
+        Rhs: ComplexFloat + Into<Complex<Rhs::Real>>,
+        Complex<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real>: Into<<Complex<T::Real> as Mul<Complex<Rhs::Real>>>::Output>,
+        Complex<T::Real>: AddAssign + MulAssign + Mul<Complex<Rhs::Real>, Output: ComplexFloat<Real = <<T as Mul<Rhs>>::Output as ComplexFloat>::Real> + MulAssign + AddAssign + MulAssign<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real> + Sum + 'static>,
+        Complex<Rhs::Real>: AddAssign + MulAssign,
         C: FromIterator<<T as Mul<Rhs>>::Output>;
         
     fn cconvolve_direct<Rhs, C>(&self, rhs: &[Rhs]) -> C
@@ -76,14 +77,15 @@ pub trait SliceMath<T>: SliceOps<T>
         Complex<T>: MulAssign + AddAssign + ComplexFloat<Real = T> + Mul<Complex<Rhs>, Output: ComplexFloat<Real: Float>>,
         Complex<Rhs>: MulAssign + AddAssign + ComplexFloat<Real = Rhs>,
         <Complex<T> as Mul<Complex<Rhs>>>::Output: ComplexFloat<Real: Float> + Into<Complex<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>>,
-        Complex<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>: MulAssign + AddAssign + ComplexFloat<Real = <<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>,
+        Complex<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>: MulAssign + AddAssign + MulAssign<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real> + ComplexFloat<Real = <<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>,
         C: FromIterator<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>;
     fn cconvolve_fft<Rhs, C>(&self, rhs: &[Rhs]) -> C
     where
-        T: ComplexFloat + Mul<Rhs, Output: ComplexFloat + From<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real> + 'static>,
-        Rhs: ComplexFloat,
-        Complex<T::Real>: From<T> + AddAssign + MulAssign + Mul<Complex<Rhs::Real>, Output: ComplexFloat<Real = <<T as Mul<Rhs>>::Output as ComplexFloat>::Real> + MulAssign + AddAssign + From<Complex<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real>> + Sum + 'static>,
-        Complex<Rhs::Real>: From<Rhs> + AddAssign + MulAssign,
+        T: ComplexFloat + Mul<Rhs, Output: ComplexFloat<Real: Into<<T as Mul<Rhs>>::Output>> + 'static> + Into<Complex<T::Real>> + MulAssign<T::Real>,
+        Rhs: ComplexFloat + Into<Complex<Rhs::Real>>,
+        Complex<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real>: Into<<Complex<T::Real> as Mul<Complex<Rhs::Real>>>::Output>,
+        Complex<T::Real>: AddAssign + MulAssign + Mul<Complex<Rhs::Real>, Output: ComplexFloat<Real = <<T as Mul<Rhs>>::Output as ComplexFloat>::Real> + MulAssign + AddAssign + MulAssign<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real> + Sum + 'static>,
+        Complex<Rhs::Real>: AddAssign + MulAssign,
         C: FromIterator<<T as Mul<Rhs>>::Output>;
         
     fn dtft(&self, omega: T::Real) -> Complex<T::Real>
@@ -93,7 +95,8 @@ pub trait SliceMath<T>: SliceOps<T>
         
     fn fft_unscaled<const I: bool>(&mut self)
     where
-        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<<T>::Real>> + Sum;
+        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + Sum,
+        Complex<T::Real>: Into<T>;
     
     /// Performs an iterative, in-place radix-2 FFT algorithm as described in https://en.wikipedia.org/wiki/Cooley%E2%80%93Tukey_FFT_algorithm#Data_reordering,_bit_reversal,_and_in-place_algorithms.
     /// If length is not a power of two, it uses the DFT, which is a lot slower.
@@ -121,7 +124,8 @@ pub trait SliceMath<T>: SliceOps<T>
     /// ```
     fn fft(&mut self)
     where
-        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<T::Real>> + Sum;
+        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + Sum,
+        Complex<T::Real>: Into<T>;
         
     /// Performs an iterative, in-place radix-2 IFFT algorithm as described in https://en.wikipedia.org/wiki/Cooley%E2%80%93Tukey_FFT_algorithm#Data_reordering,_bit_reversal,_and_in-place_algorithms.
     /// If length is not a power of two, it uses the IDFT, which is a lot slower.
@@ -149,7 +153,8 @@ pub trait SliceMath<T>: SliceOps<T>
     /// ```
     fn ifft(&mut self)
     where
-        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<T::Real>> + Sum;
+        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + MulAssign<T::Real> + Sum,
+        Complex<T::Real>: Into<T>;
         
     /// Walsh-Hadamard transform
     fn fwht_unscaled(&mut self)
@@ -171,7 +176,7 @@ pub trait SliceMath<T>: SliceOps<T>
     fn ifht(&mut self)
     where
         T: ComplexFloat<Real: Into<T>> + Into<Complex<T::Real>> + 'static,
-        Complex<T::Real>: AddAssign + MulAssign;
+        Complex<T::Real>: AddAssign + MulAssign + MulAssign<T::Real>;
         
     fn dst_i(&mut self)
     where
@@ -184,7 +189,7 @@ pub trait SliceMath<T>: SliceOps<T>
     fn dst_iii(&mut self)
     where
         T: ComplexFloat<Real: Into<T>> + Into<Complex<T::Real>> + 'static,
-        Complex<T::Real>: AddAssign + MulAssign + Mul<T, Output = Complex<T::Real>>;
+        Complex<T::Real>: AddAssign + MulAssign + MulAssign<T::Real> + Mul<T, Output = Complex<T::Real>>;
     fn dst_iv(&mut self)
     where
         T: ComplexFloat<Real: Into<T>> + Into<Complex<T::Real>> + 'static,
@@ -215,7 +220,7 @@ pub trait SliceMath<T>: SliceOps<T>
     fn real_ifft(&mut self, x: &[Complex<T>])
     where
         T: Float,
-        Complex<T>: ComplexFloat<Real = T> + MulAssign + AddAssign;
+        Complex<T>: ComplexFloat<Real = T> + MulAssign + AddAssign + MulAssign<T>;
         
     
     fn polynomial<Rhs>(&self, rhs: Rhs) -> T
@@ -262,14 +267,14 @@ pub trait SliceMath<T>: SliceOps<T>
     #[cfg(feature = "ndarray")]
     fn polynomial_roots<S>(&self) -> S
     where
-        Complex<<T as ComplexFloat>::Real>: From<T> + AddAssign + SubAssign + MulAssign + DivAssign + DivAssign<<T as ComplexFloat>::Real>,
-        T: ComplexFloat + ndarray_linalg::Lapack<Complex = Complex<<T as ComplexFloat>::Real>>,
+        Complex<<T as ComplexFloat>::Real>: AddAssign + SubAssign + MulAssign + DivAssign + DivAssign<<T as ComplexFloat>::Real>,
+        T: ComplexFloat + ndarray_linalg::Lapack<Complex = Complex<<T as ComplexFloat>::Real>> + Into<Complex<<T as ComplexFloat>::Real>>,
         S: FromIterator<Complex<<T as ComplexFloat>::Real>>;
     #[cfg(feature = "ndarray")]
     fn rpolynomial_roots<S>(&self) -> S
     where
-        Complex<<T as ComplexFloat>::Real>: From<T> + AddAssign + SubAssign + MulAssign + DivAssign + DivAssign<<T as ComplexFloat>::Real>,
-        T: ComplexFloat + ndarray_linalg::Lapack<Complex = Complex<<T as ComplexFloat>::Real>>,
+        Complex<<T as ComplexFloat>::Real>: AddAssign + SubAssign + MulAssign + DivAssign + DivAssign<<T as ComplexFloat>::Real>,
+        T: ComplexFloat + ndarray_linalg::Lapack<Complex = Complex<<T as ComplexFloat>::Real>> + Into<Complex<<T as ComplexFloat>::Real>>,
         S: FromIterator<Complex<<T as ComplexFloat>::Real>>;
         
     #[cfg(feature = "ndarray")]
@@ -328,11 +333,11 @@ pub trait SliceMath<T>: SliceOps<T>
     fn frac_rotate_right(&mut self, shift: T::Real)
     where
         T: ComplexFloat<Real: Into<T> + SubAssign> + Into<Complex<<T>::Real>> + 'static,
-        Complex<T::Real>: AddAssign + MulAssign;
+        Complex<T::Real>: AddAssign + MulAssign + MulAssign<T::Real>;
     fn frac_rotate_left(&mut self, shift: T::Real)
     where
         T: ComplexFloat<Real: Into<T> + SubAssign> + Into<Complex<<T>::Real>> + 'static,
-        Complex<T::Real>: AddAssign + MulAssign;
+        Complex<T::Real>: AddAssign + MulAssign + MulAssign<T::Real>;
 }
 
 impl<T> SliceMath<T> for [T]
@@ -391,7 +396,7 @@ impl<T> SliceMath<T> for [T]
         Complex<T>: MulAssign + AddAssign + ComplexFloat<Real = T> + Mul<Complex<Rhs>, Output: ComplexFloat<Real: Float>>,
         Complex<Rhs>: MulAssign + AddAssign + ComplexFloat<Real = Rhs>,
         <Complex<T> as Mul<Complex<Rhs>>>::Output: ComplexFloat<Real: Float> + Into<Complex<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>>,
-        Complex<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>: MulAssign + AddAssign + ComplexFloat<Real = <<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>,
+        Complex<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>: MulAssign + AddAssign + MulAssign<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real> + ComplexFloat<Real = <<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>,
         C: FromIterator<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>
     {
         let y_len = (self.len() + rhs.len()).saturating_sub(1);
@@ -423,10 +428,11 @@ impl<T> SliceMath<T> for [T]
     
     fn convolve_fft<Rhs, C>(&self, rhs: &[Rhs]) -> C
     where
-        T: ComplexFloat + Mul<Rhs, Output: ComplexFloat + From<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real> + 'static>,
-        Rhs: ComplexFloat,
-        Complex<T::Real>: From<T> + AddAssign + MulAssign + Mul<Complex<Rhs::Real>, Output: ComplexFloat<Real = <<T as Mul<Rhs>>::Output as ComplexFloat>::Real> + MulAssign + AddAssign + From<Complex<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real>> + Sum + 'static>,
-        Complex<Rhs::Real>: From<Rhs> + AddAssign + MulAssign,
+        T: ComplexFloat + Mul<Rhs, Output: ComplexFloat<Real: Into<<T as Mul<Rhs>>::Output>> + 'static> + Into<Complex<T::Real>>,
+        Rhs: ComplexFloat + Into<Complex<Rhs::Real>>,
+        Complex<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real>: Into<<Complex<T::Real> as Mul<Complex<Rhs::Real>>>::Output>,
+        Complex<T::Real>: AddAssign + MulAssign + Mul<Complex<Rhs::Real>, Output: ComplexFloat<Real = <<T as Mul<Rhs>>::Output as ComplexFloat>::Real> + MulAssign + AddAssign + MulAssign<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real> + Sum + 'static>,
+        Complex<Rhs::Real>: AddAssign + MulAssign,
         C: FromIterator<<T as Mul<Rhs>>::Output>
     {
         let y_len = (self.len() + rhs.len()).saturating_sub(1);
@@ -493,7 +499,7 @@ impl<T> SliceMath<T> for [T]
         Complex<T>: MulAssign + AddAssign + ComplexFloat<Real = T> + Mul<Complex<Rhs>, Output: ComplexFloat<Real: Float>>,
         Complex<Rhs>: MulAssign + AddAssign + ComplexFloat<Real = Rhs>,
         <Complex<T> as Mul<Complex<Rhs>>>::Output: ComplexFloat<Real: Float> + Into<Complex<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>>,
-        Complex<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>: MulAssign + AddAssign + ComplexFloat<Real = <<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>,
+        Complex<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>: MulAssign + AddAssign + MulAssign<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real> + ComplexFloat<Real = <<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>,
         C: FromIterator<<<Complex<T> as Mul<Complex<Rhs>>>::Output as ComplexFloat>::Real>
     {
         let len = self.len().max(rhs.len());
@@ -521,10 +527,11 @@ impl<T> SliceMath<T> for [T]
     }
     fn cconvolve_fft<Rhs, C>(&self, rhs: &[Rhs]) -> C
     where
-        T: ComplexFloat + Mul<Rhs, Output: ComplexFloat + From<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real> + 'static>,
-        Rhs: ComplexFloat,
-        Complex<T::Real>: From<T> + AddAssign + MulAssign + Mul<Complex<Rhs::Real>, Output: ComplexFloat<Real = <<T as Mul<Rhs>>::Output as ComplexFloat>::Real> + MulAssign + AddAssign + From<Complex<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real>> + Sum + 'static>,
-        Complex<Rhs::Real>: From<Rhs> + AddAssign + MulAssign,
+        T: ComplexFloat + Mul<Rhs, Output: ComplexFloat<Real: Into<<T as Mul<Rhs>>::Output>> + 'static> + Into<Complex<T::Real>>,
+        Rhs: ComplexFloat + Into<Complex<Rhs::Real>>,
+        Complex<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real>: Into<<Complex<T::Real> as Mul<Complex<Rhs::Real>>>::Output>,
+        Complex<T::Real>: AddAssign + MulAssign + Mul<Complex<Rhs::Real>, Output: ComplexFloat<Real = <<T as Mul<Rhs>>::Output as ComplexFloat>::Real> + MulAssign + AddAssign + MulAssign<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real> + Sum + 'static>,
+        Complex<Rhs::Real>: AddAssign + MulAssign,
         C: FromIterator<<T as Mul<Rhs>>::Output>
     {
         let len = self.len().max(rhs.len());
@@ -578,25 +585,28 @@ impl<T> SliceMath<T> for [T]
 
     fn fft_unscaled<const I: bool>(&mut self)
     where
-        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<<T>::Real>> + Sum
+        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + Sum,
+        Complex<T::Real>: Into<T>
     {
         fft::fft_unscaled::<_, I>(self, None)
     }
 
     fn fft(&mut self)
     where
-        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<<T>::Real>> + Sum
+        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + Sum,
+        Complex<T::Real>: Into<T>
     {
         self.fft_unscaled::<false>()
     }
 
     fn ifft(&mut self)
     where
-        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<<T>::Real>> + Sum
+        T: ComplexFloat<Real: Float> + MulAssign + AddAssign + MulAssign<T::Real> + Sum,
+        Complex<T::Real>: Into<T>
     {
         self.fft_unscaled::<true>();
 
-        self.mul_assign_all(<T as From<_>>::from(<Complex<_> as From<_>>::from(<T::Real as NumCast>::from(1.0/self.len() as f64).unwrap())));
+        self.mul_assign_all(<T::Real as NumCast>::from(1.0/self.len() as f64).unwrap());
     }
     
     fn fwht_unscaled(&mut self)
@@ -675,7 +685,7 @@ impl<T> SliceMath<T> for [T]
     fn ifht(&mut self)
     where
         T: ComplexFloat<Real: Into<T> + Into<Complex<T::Real>>> + Into<Complex<T::Real>> + 'static,
-        Complex<T::Real>: AddAssign + MulAssign
+        Complex<T::Real>: AddAssign + MulAssign + MulAssign<T::Real>
     {
         if core::intrinsics::type_id::<T>() == core::intrinsics::type_id::<Complex<T::Real>>()
         {
@@ -825,7 +835,7 @@ impl<T> SliceMath<T> for [T]
     fn dst_iii(&mut self)
     where
         T: ComplexFloat<Real: Into<T>> + Into<Complex<T::Real>> + 'static,
-        Complex<T::Real>: AddAssign + MulAssign + Mul<T::Real, Output = Complex<T::Real>> + Mul<T, Output = Complex<T::Real>>
+        Complex<T::Real>: AddAssign + MulAssign + MulAssign<T::Real> + Mul<T::Real, Output = Complex<T::Real>> + Mul<T, Output = Complex<T::Real>>
     {
         let len = self.len();
         if len <= 1
@@ -1196,7 +1206,7 @@ impl<T> SliceMath<T> for [T]
     fn real_ifft(&mut self, x: &[Complex<T>])
     where
         T: Float,
-        Complex<T>: ComplexFloat<Real = T> + MulAssign + AddAssign
+        Complex<T>: ComplexFloat<Real = T> + MulAssign + AddAssign + MulAssign<T>
     {
         let len = self.len();
 
@@ -1393,8 +1403,8 @@ impl<T> SliceMath<T> for [T]
     #[cfg(feature = "ndarray")]
     fn polynomial_roots<S>(&self) -> S
     where
-        Complex<<T as ComplexFloat>::Real>: From<T> + AddAssign + SubAssign + MulAssign + DivAssign + DivAssign<<T as ComplexFloat>::Real>,
-        T: ComplexFloat + ndarray_linalg::Lapack<Complex = Complex<<T as ComplexFloat>::Real>>,
+        Complex<<T as ComplexFloat>::Real>: AddAssign + SubAssign + MulAssign + DivAssign + DivAssign<<T as ComplexFloat>::Real>,
+        T: ComplexFloat + ndarray_linalg::Lapack<Complex = Complex<<T as ComplexFloat>::Real>> + Into<Complex<<T as ComplexFloat>::Real>>,
         S: FromIterator<Complex<<T as ComplexFloat>::Real>>
     {
         use ndarray_linalg::eig::EigVals;
@@ -1410,7 +1420,7 @@ impl<T> SliceMath<T> for [T]
         let len = roots.len();
         // Use newtons method
         let p: Vec<Complex<<T as ComplexFloat>::Real>> = self.into_iter()
-            .map(|p| From::from(*p))
+            .map(|p| (*p).into())
             .collect();
         let dp: Vec<_> = p.derivate_polynomial();
         for k in 0..len
@@ -1434,8 +1444,8 @@ impl<T> SliceMath<T> for [T]
     #[cfg(feature = "ndarray")]
     fn rpolynomial_roots<S>(&self) -> S
     where
-        Complex<<T as ComplexFloat>::Real>: From<T> + AddAssign + SubAssign + MulAssign + DivAssign + DivAssign<<T as ComplexFloat>::Real>,
-        T: ComplexFloat + ndarray_linalg::Lapack<Complex = Complex<<T as ComplexFloat>::Real>>,
+        Complex<<T as ComplexFloat>::Real>: AddAssign + SubAssign + MulAssign + DivAssign + DivAssign<<T as ComplexFloat>::Real>,
+        T: ComplexFloat + ndarray_linalg::Lapack<Complex = Complex<<T as ComplexFloat>::Real>> + Into<Complex<<T as ComplexFloat>::Real>>,
         S: FromIterator<Complex<<T as ComplexFloat>::Real>>
     {
         use ndarray_linalg::EigVals;
@@ -1451,7 +1461,7 @@ impl<T> SliceMath<T> for [T]
         let len = roots.len();
         // Use newtons method
         let p: Vec<Complex<<T as ComplexFloat>::Real>> = self.into_iter()
-            .map(|p| From::from(*p))
+            .map(|p| (*p).into())
             .collect();
         let dp: Vec<_> = p.derivate_rpolynomial();
         for k in 0..len
@@ -1609,7 +1619,7 @@ impl<T> SliceMath<T> for [T]
     fn frac_rotate_right(&mut self, shift: T::Real)
     where
         T: ComplexFloat<Real: Into<T> + SubAssign> + Into<Complex<<T>::Real>> + 'static,
-        Complex<T::Real>: AddAssign + MulAssign
+        Complex<T::Real>: AddAssign + MulAssign + MulAssign<T::Real>
     {
         let (trunc, fract) = if let Some(trunc) = NumCast::from(shift.trunc())
         {
@@ -1667,7 +1677,7 @@ impl<T> SliceMath<T> for [T]
     fn frac_rotate_left(&mut self, shift: T::Real)
     where
         T: ComplexFloat<Real: Into<T> + SubAssign> + Into<Complex<<T>::Real>> + 'static,
-        Complex<T::Real>: AddAssign + MulAssign
+        Complex<T::Real>: AddAssign + MulAssign + MulAssign<T::Real>
     {
         self.frac_rotate_right(-shift)
     }

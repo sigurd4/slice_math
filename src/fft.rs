@@ -7,7 +7,8 @@ use slice_ops::is_power_of;
 
 pub fn fft_unscaled<T, const I: bool>(slice: &mut [T], mut temp: Option<&mut [T]>)
 where
-    T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<T::Real>> + Sum,
+    T: ComplexFloat<Real: Float> + MulAssign + AddAssign + Sum,
+    Complex<T::Real>: Into<T>
 {
     let len = slice.len();
     if len <= 1
@@ -49,7 +50,8 @@ where
 
 pub fn partial_fft_unscaled<T, const I: bool>(slice: &mut [T], temp: &mut [T], m: usize)
 where
-    T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<T::Real>> + Sum
+    T: ComplexFloat<Real: Float> + MulAssign + AddAssign + Sum,
+    Complex<T::Real>: Into<T>
 {
     let mut i = 0;
     let ind: Vec<_> = (0..m).map(|k| {
@@ -70,7 +72,8 @@ where
 
 pub fn fft_radix2_unscaled<T, const I: bool>(slice: &mut [T], temp: &mut Option<&mut [T]>) -> bool
 where
-    T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<T::Real>> + Sum
+    T: ComplexFloat<Real: Float> + MulAssign + AddAssign + Sum,
+    Complex<T::Real>: Into<T>
 {
     let len = slice.len();
     if len.is_power_of_two()
@@ -82,7 +85,7 @@ where
         for s in 0..len.ilog2()
         {
             let m = 2usize << s;
-            let wm = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/m as f64).unwrap()));
+            let wm = Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/m as f64).unwrap()).into();
             for k in (0..len).step_by(m)
             {
                 let mut w = T::one();
@@ -117,7 +120,7 @@ where
         partial_fft_unscaled::<_, I>(slice, temp, 2);
         let x: Vec<_> = temp.chunks(len/2).collect();
 
-        let wn = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/len as f64).unwrap()));
+        let wn = Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/len as f64).unwrap()).into();
         let mut wn_pk = T::one();
         for k in 0..len/2
         {
@@ -136,7 +139,8 @@ where
 
 pub fn fft_radix3_unscaled<T, const I: bool>(slice: &mut [T], temp: &mut Option<&mut [T]>) -> bool
 where
-    T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<T::Real>> + Sum
+    T: ComplexFloat<Real: Float> + MulAssign + AddAssign + Sum,
+    Complex<T::Real>: Into<T>
 {
     let len = slice.len();
 
@@ -144,7 +148,7 @@ where
 
     if len % P == 0
     {
-        let w3 = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/P as f64).unwrap()));
+        let w3 = Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/P as f64).unwrap()).into();
         let w3_p2 = w3*w3;
 
         if is_power_of(len, P)
@@ -156,7 +160,7 @@ where
             for s in 0..len.ilog(P)
             {
                 let m = P.pow(s + 1);
-                let wm = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/m as f64).unwrap()));
+                let wm = Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/m as f64).unwrap()).into();
                 for k in (0..len).step_by(m)
                 {
                     let mut w = T::one();
@@ -198,7 +202,7 @@ where
         partial_fft_unscaled::<_, I>(slice, temp, P);
         let x: Vec<_> = temp.chunks(len/P).collect();
 
-        let wn = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/len as f64).unwrap()));
+        let wn = Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/len as f64).unwrap()).into();
         let mut w = T::one();
         for k in 0..len/P
         {
@@ -223,7 +227,8 @@ where
 
 pub fn fft_radix5_unscaled<T, const I: bool>(slice: &mut [T], temp: &mut Option<&mut [T]>) -> bool
 where
-    T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<T::Real>> + Sum
+    T: ComplexFloat<Real: Float> + MulAssign + AddAssign + Sum,
+    Complex<T::Real>: Into<T>
 {
     let len = slice.len();
 
@@ -237,7 +242,7 @@ where
 
             slice.digit_rev_permutation(P);
             
-            let w5 = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/P as f64).unwrap()));
+            let w5 = Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/P as f64).unwrap()).into();
             let w5_p2 = w5*w5;
             let w5_p3 = w5_p2*w5;
             let w5_p4 = w5_p3*w5;
@@ -245,7 +250,7 @@ where
             for s in 0..len.ilog(P)
             {
                 let m = P.pow(s + 1);
-                let wm = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/m as f64).unwrap()));
+                let wm = Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/m as f64).unwrap()).into();
                 for k in (0..len).step_by(m)
                 {
                     let mut w = T::one();
@@ -293,11 +298,11 @@ where
         partial_fft_unscaled::<_, I>(slice, temp, P);
         let x: Vec<_> = temp.chunks(len/P).collect();
 
-        let w5 = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/P as f64).unwrap()));
+        let w5 = Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/P as f64).unwrap()).into();
         let w5_p2 = w5*w5;
         let w5_p3 = w5_p2*w5;
         let w5_p4 = w5_p3*w5;
-        let wn = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/len as f64).unwrap()));
+        let wn = Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/len as f64).unwrap()).into();
         let mut w = T::one();
         for k in 0..len/P
         {
@@ -327,7 +332,8 @@ where
 
 pub fn fft_radix7_unscaled<T, const I: bool>(slice: &mut [T], temp: &mut Option<&mut [T]>) -> bool
 where
-    T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<T::Real>> + Sum
+    T: ComplexFloat<Real: Float> + MulAssign + AddAssign + Sum,
+    Complex<T::Real>: Into<T>
 {
     let len = slice.len();
 
@@ -341,7 +347,7 @@ where
 
             slice.digit_rev_permutation(P);
             
-            let w7 = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/P as f64).unwrap()));
+            let w7 = Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/P as f64).unwrap()).into();
             let w7_p2 = w7*w7;
             let w7_p3 = w7_p2*w7;
             let w7_p4 = w7_p3*w7;
@@ -351,7 +357,7 @@ where
             for s in 0..len.ilog(P)
             {
                 let m = P.pow(s + 1);
-                let wm = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/m as f64).unwrap()));
+                let wm = Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/m as f64).unwrap()).into();
                 for k in (0..len).step_by(m)
                 {
                     let mut w = T::one();
@@ -405,13 +411,13 @@ where
         partial_fft_unscaled::<_, I>(slice, temp, P);
         let x: Vec<_> = temp.chunks(len/P).collect();
 
-        let w7 = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/P as f64).unwrap()));
+        let w7 = Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/P as f64).unwrap()).into();
         let w7_p2 = w7*w7;
         let w7_p3 = w7_p2*w7;
         let w7_p4 = w7_p3*w7;
         let w7_p5 = w7_p4*w7;
         let w7_p6 = w7_p5*w7;
-        let wn = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/len as f64).unwrap()));
+        let wn = Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/len as f64).unwrap()).into();
         let mut w = T::one();
         for k in 0..len/P
         {
@@ -448,7 +454,8 @@ where
 
 pub fn fft_radix_p_unscaled<T, const P: usize, const I: bool>(slice: &mut [T], temp: &mut Option<&mut [T]>) -> bool
 where
-    T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<T::Real>> + Sum,
+    T: ComplexFloat<Real: Float> + MulAssign + AddAssign + Sum,
+    Complex<T::Real>: Into<T>,
     [(); P - 1]:
 {
     let len = slice.len();
@@ -469,7 +476,7 @@ where
                     }
                     else
                     {
-                        <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}*i as f64/P as f64).unwrap()))
+                        Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}*i as f64/P as f64).unwrap()).into()
                     }
                 })
             };
@@ -480,7 +487,7 @@ where
             for s in 0..len.ilog(P)
             {
                 let m = P.pow(s + 1);
-                let wm = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/m as f64).unwrap()));
+                let wm = Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/m as f64).unwrap()).into();
                 for k in (0..len).step_by(m)
                 {
                     let mut w = T::one();
@@ -539,13 +546,13 @@ where
                 }
                 else
                 {
-                    <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}*i as f64/P as f64).unwrap()))
+                    Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}*i as f64/P as f64).unwrap()).into()
                 }
             })
         };
         let mut y: [T; P] = [T::zero(); P];
 
-        let wn = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/len as f64).unwrap()));
+        let wn = Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/len as f64).unwrap()).into();
         let mut w = T::one();
         let m = len/P;
         for k in 0..m
@@ -575,7 +582,8 @@ where
 
 pub fn fft_radix_n_sqrt_unscaled<T, const I: bool>(slice: &mut [T], temp: &mut Option<&mut [T]>) -> bool
 where
-    T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<T::Real>> + Sum
+    T: ComplexFloat<Real: Float> + MulAssign + AddAssign + Sum,
+    Complex<T::Real>: Into<T>
 {
     let len = slice.len();
     let p = {
@@ -591,7 +599,7 @@ where
                 }
                 else
                 {
-                    <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}*i as f64/p as f64).unwrap()))
+                    Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}*i as f64/p as f64).unwrap()).into()
                 }
             }).collect();
         let mut y = vec![T::zero(); p];
@@ -607,7 +615,7 @@ where
             for s in 0..len.ilog(p)
             {
                 let m = p.pow(s + 1);
-                let wm = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/m as f64).unwrap()));
+                let wm = Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/m as f64).unwrap()).into();
                 for k in (0..len).step_by(m)
                 {
                     let mut w = T::one();
@@ -658,7 +666,7 @@ where
         partial_fft_unscaled::<_, I>(slice, temp, p);
         let x: Vec<_> = temp.chunks(len/p).collect();
 
-        let wn = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/len as f64).unwrap()));
+        let wn = Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/len as f64).unwrap()).into();
         let mut w = T::one();
         let m = len/p;
         for k in 0..m
@@ -688,7 +696,8 @@ where
 
 pub fn dft_unscaled<T, const I: bool>(slice: &mut [T], temp: &mut Option<&mut [T]>)
 where
-    T: ComplexFloat<Real: Float> + MulAssign + AddAssign + From<Complex<T::Real>>
+    T: ComplexFloat<Real: Float> + MulAssign + AddAssign,
+    Complex<T::Real>: Into<T>
 {
     let len = slice.len();
 
@@ -703,7 +712,7 @@ where
         tempvec.as_mut().unwrap()
     };
 
-    let wn = <T as From<_>>::from(Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/len as f64).unwrap()));
+    let wn = Complex::cis(<T::Real as NumCast>::from(if I {TAU} else {-TAU}/len as f64).unwrap()).into();
     let mut wnk = T::one();
 
     unsafe {
