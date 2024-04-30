@@ -57,12 +57,13 @@ mod tests {
     #[test]
     fn deconvolve()
     {
-        let x = [0.0, 1.0, 2.0, 3.0, 0.0];
-        let h = [1.0, 1.0, 0.5, 0.0];
+        let x = [1.0, 2.0, 3.0];
+        let h = [1.0, 1.0, 3.0, 4.0];
         let y: Vec<_> = x.convolve_direct(&h);
-        let (x2, r): (Vec<_>, Vec<_>) = y.deconvolve_direct(&[1.0, 1.0, 0.5]);
-        println!("{:?}", x2);
-        println!("{:?}", r);
+        let (x1, r1): (Vec<_>, Vec<_>) = y.deconvolve_direct(&h).unwrap();
+        let (x2, r2): (Vec<_>, Vec<_>) = y.deconvolve_fft(&h).unwrap();
+        println!("{:?}, {:?}", x1, r1);
+        println!("{:?}, {:?}", x2, r2);
     }
     
     #[test]

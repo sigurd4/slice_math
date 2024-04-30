@@ -88,11 +88,17 @@ pub trait SliceMath<T>: SliceOps<T>
         Complex<Rhs::Real>: AddAssign + MulAssign,
         C: FromIterator<<T as Mul<Rhs>>::Output>;
 
-    fn deconvolve_direct<Rhs, Q, R>(&self, rhs: &[Rhs]) -> (Q, R)
+    fn deconvolve_direct<Rhs, Q, R>(&self, rhs: &[Rhs]) -> Option<(Q, R)>
     where
         T: Div<Rhs, Output: Zero + Mul<Rhs, Output: Zero + AddAssign + Copy> + Copy> + Sub<<<T as Div<Rhs>>::Output as Mul<Rhs>>::Output, Output = T> + Zero + Copy,
         Rhs: Copy + Zero,
         Q: FromIterator<<T as Div<Rhs>>::Output>,
+        R: FromIterator<T>;
+    fn deconvolve_fft<Q, R>(&self, rhs: &[T]) -> Option<(Q, R)>
+    where
+        T: ComplexFloat<Real: Into<T>> + SubAssign + AddAssign + Into<Complex<T::Real>> + 'static,
+        Complex<T::Real>: AddAssign + MulAssign + MulAssign<T::Real>,
+        Q: FromIterator<T>,
         R: FromIterator<T>;
         
     fn dtft(&self, omega: T::Real) -> Complex<T::Real>
@@ -574,7 +580,7 @@ impl<T> SliceMath<T> for [T]
             .collect()
     }
     
-    fn deconvolve_direct<Rhs, Q, R>(&self, rhs: &[Rhs]) -> (Q, R)
+    fn deconvolve_direct<Rhs, Q, R>(&self, rhs: &[Rhs]) -> Option<(Q, R)>
     where
         T: Div<Rhs, Output: Zero + Mul<Rhs, Output: Zero + AddAssign + Copy> + Copy> + Sub<<<T as Div<Rhs>>::Output as Mul<Rhs>>::Output, Output = T> + Zero + Copy,
         Rhs: Copy + Zero,
@@ -584,6 +590,10 @@ impl<T> SliceMath<T> for [T]
         let mut lag = rhs.len();
         let rhs = rhs.trim_zeros_front();
         lag -= rhs.len();
+        if rhs.len() == 0
+        {
+            return None
+        }
 
         let mut q = vec![];
         let mut r = self.to_vec();
@@ -596,10 +606,10 @@ impl<T> SliceMath<T> for [T]
             {
                 q = q.split_off(lag);
                 r = core::iter::repeat(T::zero())
-                    .take(lag)
+                    .take(self.len() - r.len())
                     .chain(r)
                     .collect();
-                return (q.into_iter().collect(), r.into_iter().collect())
+                return Some((q.into_iter().collect(), r.into_iter().collect()))
             }
             let n = nr - d;
             let mut s = vec![<T as Div<Rhs>>::Output::zero(); n];
@@ -614,6 +624,73 @@ impl<T> SliceMath<T> for [T]
                 .skip(1)
                 .collect();
         }
+    }
+    fn deconvolve_fft<Q, R>(&self, rhs: &[T]) -> Option<(Q, R)>
+    where
+        T: ComplexFloat<Real: Into<T>> + SubAssign + AddAssign + Into<Complex<T::Real>> + 'static,
+        Complex<T::Real>: AddAssign + MulAssign + MulAssign<T::Real>,
+        Q: FromIterator<T>,
+        R: FromIterator<T>
+    {
+        let nb = self.len();
+        let na = rhs.len();
+        let nw = nb.max(na);
+        let n = (nb + 1).saturating_sub(na);
+
+        let mut q = vec![T::zero(); n];
+        if let Some(q0) = q.first_mut()
+        {
+            *q0 = One::one();
+        }
+
+        {
+            let mut w = vec![T::zero(); nw - 1];
+            let a = rhs.trim_zeros_front();
+            let b = self.trim_zeros_front();
+            if a.len() == 0
+            {
+                return None
+            }
+            let a0 = a[0];
+
+            for q in q.iter_mut()
+            {
+                let mut w0 = *q;
+                for (&w, &a) in w.iter()
+                    .zip(a.iter()
+                        .skip(1)
+                    )
+                {
+                    w0 -= w*(a/a0)
+                }
+                *q = w0*b[0];
+                for (&w, &b) in w.iter()
+                    .zip(b.iter()
+                        .skip(1)
+                    )
+                {
+                    *q += w*b
+                }
+
+                w.shift_right(&mut w0);
+            }
+        }
+
+        let qa: Vec<_> = q.convolve_fft(rhs);
+
+        let nqa = qa.len();
+        let r = self.iter()
+            .copied()
+            .chain(core::iter::repeat(T::zero())
+                .take(nb.saturating_sub(nqa))
+            ).zip(qa.into_iter()
+                .chain(core::iter::repeat(T::zero())
+                    .take(nqa.saturating_sub(nb))
+                )
+            ).map(|(b, qa)| b - qa)
+            .collect();
+
+        Some((q.into_iter().collect(), r))
     }
     
     fn dtft(&self, omega: T::Real) -> Complex<T::Real>
