@@ -53,6 +53,17 @@ mod tests {
 
         println!("{:?}", x)
     }
+
+    #[test]
+    fn deconvolve()
+    {
+        let x = [0.0, 1.0, 2.0, 3.0, 0.0];
+        let h = [1.0, 1.0, 0.5, 0.0];
+        let y: Vec<_> = x.convolve_direct(&h);
+        let (x2, r): (Vec<_>, Vec<_>) = y.deconvolve_direct(&[1.0, 1.0, 0.5]);
+        println!("{:?}", x2);
+        println!("{:?}", r);
+    }
     
     #[test]
     fn dct()

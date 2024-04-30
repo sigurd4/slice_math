@@ -87,6 +87,13 @@ pub trait SliceMath<T>: SliceOps<T>
         Complex<T::Real>: AddAssign + MulAssign + Mul<Complex<Rhs::Real>, Output: ComplexFloat<Real = <<T as Mul<Rhs>>::Output as ComplexFloat>::Real> + MulAssign + AddAssign + MulAssign<<<T as Mul<Rhs>>::Output as ComplexFloat>::Real> + Sum + 'static>,
         Complex<Rhs::Real>: AddAssign + MulAssign,
         C: FromIterator<<T as Mul<Rhs>>::Output>;
+
+    fn deconvolve_direct<Rhs, Q, R>(&self, rhs: &[Rhs]) -> (Q, R)
+    where
+        T: Div<Rhs, Output: Zero + Mul<Rhs, Output: Zero + AddAssign + Copy> + Copy> + Sub<<<T as Div<Rhs>>::Output as Mul<Rhs>>::Output, Output = T> + Zero + Copy,
+        Rhs: Copy + Zero,
+        Q: FromIterator<<T as Div<Rhs>>::Output>,
+        R: FromIterator<T>;
         
     fn dtft(&self, omega: T::Real) -> Complex<T::Real>
     where
@@ -565,6 +572,48 @@ impl<T> SliceMath<T> for [T]
                 }
             })
             .collect()
+    }
+    
+    fn deconvolve_direct<Rhs, Q, R>(&self, rhs: &[Rhs]) -> (Q, R)
+    where
+        T: Div<Rhs, Output: Zero + Mul<Rhs, Output: Zero + AddAssign + Copy> + Copy> + Sub<<<T as Div<Rhs>>::Output as Mul<Rhs>>::Output, Output = T> + Zero + Copy,
+        Rhs: Copy + Zero,
+        Q: FromIterator<<T as Div<Rhs>>::Output>,
+        R: FromIterator<T>
+    {
+        let mut lag = rhs.len();
+        let rhs = rhs.trim_zeros_front();
+        lag -= rhs.len();
+
+        let mut q = vec![];
+        let mut r = self.to_vec();
+        let d = rhs.len() - 1;
+        let c = *rhs.first().unwrap();
+        loop
+        {
+            let nr = r.len();
+            if nr <= d
+            {
+                q = q.split_off(lag);
+                r = core::iter::repeat(T::zero())
+                    .take(lag)
+                    .chain(r)
+                    .collect();
+                return (q.into_iter().collect(), r.into_iter().collect())
+            }
+            let n = nr - d;
+            let mut s = vec![<T as Div<Rhs>>::Output::zero(); n];
+            s[0] = *r.first().unwrap()/c;
+
+            let sv: Vec<_> = s.convolve_direct(&rhs);
+
+            q.push(s[0]);
+            r = sv.into_iter()
+                .zip(r)
+                .map(|(s, r)| r - s)
+                .skip(1)
+                .collect();
+        }
     }
     
     fn dtft(&self, omega: T::Real) -> Complex<T::Real>
