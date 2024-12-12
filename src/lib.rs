@@ -4,6 +4,7 @@
 #![feature(let_chains)]
 #![feature(new_uninit)]
 #![feature(slice_as_chunks)]
+#![feature(const_trait_impl)]
 
 #![feature(core_intrinsics)]
 
@@ -44,6 +45,7 @@ mod tests {
         println!("{:?}", a)
     }
 
+    #[cfg(feature = "ndarray")]
     #[test]
     fn detrend()
     {

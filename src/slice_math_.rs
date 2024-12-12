@@ -8,6 +8,7 @@ use crate::fft;
 
 const NEWTON_POLYNOMIAL_ROOTS: usize = 16;
 
+#[const_trait]
 pub trait SliceMath<T>: SliceOps<T>
 {
     fn recip_assign_all(&mut self)
@@ -353,7 +354,7 @@ pub trait SliceMath<T>: SliceOps<T>
         Complex<T::Real>: AddAssign + MulAssign + MulAssign<T::Real>;
 }
 
-impl<T> SliceMath<T> for [T]
+impl<T> /*const*/ SliceMath<T> for [T]
 {
     fn recip_assign_all(&mut self)
     where
