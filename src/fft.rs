@@ -1,9 +1,9 @@
 use core::mem::MaybeUninit;
 use std::{f64::consts::TAU, iter::Sum, ops::{AddAssign, MulAssign}};
 
-use crate::{util, SliceMath, SliceOps};
+use crate::{ops::signal::SliceFft, util};
 use num::{complex::ComplexFloat, Complex, Float, NumCast, One, Zero};
-use slice_ops::is_power_of;
+use slice_ops::{is_power_of, ops::SlicePermute};
 
 pub fn fft_unscaled<T, const I: bool>(slice: &mut [T], mut temp: Option<&mut [T]>)
 where
@@ -732,16 +732,22 @@ where
     }
 }
 
-#[test]
-fn test()
+#[cfg(test)]
+mod test
 {
-    use crate::SliceMath;
+    use num::{Complex, Zero};
 
-    let mut x = [1.0, 2.0, 3.0];
-    let mut y = [Complex::zero(); 2];
+    use crate::ops::signal::SliceFft;
 
-    x.real_fft(&mut y);
-    x.real_ifft(&y);
+    #[test]
+    fn test()
+    {
+        let mut x = [1.0, 2.0, 3.0];
+        let mut y = [Complex::zero(); 2];
 
-    println!("{:?}", x)
+        x.real_fft(&mut y);
+        x.real_ifft(&y);
+
+        println!("{:?}", x)
+    }
 }
