@@ -14,7 +14,7 @@
 
 # slice_math
 
-Provides many useful match utility methods for arrays.
+Provides many useful math utility methods for arrays.
 
 Mostly for signal-processing related stuff since that's what i use the most. If anyone has any suggestions for more useful slice math operations, please post them on the github as an issue.
 

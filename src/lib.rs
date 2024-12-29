@@ -1,3 +1,4 @@
+#![allow(async_fn_in_trait)]
 #![feature(associated_type_bounds)]
 #![feature(generic_arg_infer)]
 #![feature(array_methods)]
