@@ -1,9 +1,9 @@
 use std::ops::{AddAssign, DivAssign, MulAssign, SubAssign};
 
-use num::{complex::ComplexFloat, Complex};
+use num::{complex::ComplexFloat, Complex, Zero};
 use slice_ops::Slice;
 
-use crate::ops::{poly::SlicePolyEval, SliceIntoMatrix, SliceTrimZeros};
+use crate::ops::{poly::{SliceDerivatePolynomial, SlicePolyEval}, SliceIntoMatrix, SliceTrimZeros};
 
 const NEWTON_POLYNOMIAL_ROOTS: usize = 16;
 
@@ -60,7 +60,7 @@ impl<T> SlicePolyRoots<T> for [T]
                 {
                     break
                 }
-                roots[k] -= df/dp.polynomial(root)
+                roots[k] -= df/dp.poly_eval(root)
             }
         }
         roots.into_iter()
@@ -95,12 +95,12 @@ impl<T> SlicePolyRoots<T> for [T]
             for _ in 0..NEWTON
             {
                 let root = roots[k];
-                let df = p.rpolynomial(root);
+                let df = p.rpoly_eval(root);
                 if df.is_zero()
                 {
                     break
                 }
-                roots[k] -= df/dp.rpolynomial(root)
+                roots[k] -= df/dp.rpoly_eval(root)
             }
         }
         roots.into_iter()

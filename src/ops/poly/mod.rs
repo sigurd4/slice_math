@@ -6,6 +6,6 @@ moddef::moddef!(
         integrate_polynomial,
         poly_eval,
         poly_fit for cfg(feature = "ndarray"),
-        poly_roots for cfg(feature = "ndarray")
+        poly_roots for cfg(feature = "ndarray") // Needs BoxedSlice upstream
     }
 );

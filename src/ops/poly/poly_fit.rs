@@ -1,6 +1,10 @@
+use ndarray::{linalg::Dot, Array2, ArrayView2, Data, OwnedRepr};
+use num::One;
 use slice_ops::Slice;
 
 use crate::ops::SliceIntoMatrix;
+
+use ndarray_linalg::{Lapack, QRInto, Scalar, Solve};
 
 #[const_trait]
 pub trait SlicePolyFit<T>: Slice<Item = T>
@@ -22,27 +26,28 @@ pub trait SlicePolyFit<T>: Slice<Item = T>
 
 impl<T> SlicePolyFit<T> for [T]
 where
-    T: ndarray_linalg::Lapack
+    T: Lapack
 {
     fn lin_fit(&self, y: &[T]) -> [T; 2]
     {
-        self.poly_fit::<Vec<_>>(y, 1)
-            .try_into()
-            .unwrap()
+        unsafe {
+            self.poly_fit::<Vec<_>>(y, 1)
+                .try_into()
+                .unwrap_unchecked()
+        }
     }
     
     fn rlin_fit(&self, y: &[T]) -> [T; 2]
-    where
-        T: ndarray_linalg::Lapack
     {
-        self.rpoly_fit::<Vec<_>>(y, 1)
-            .try_into()
-            .unwrap()
+        unsafe {
+            self.rpoly_fit::<Vec<_>>(y, 1)
+                .try_into()
+                .unwrap_unchecked()
+        }
     }
     
     fn poly_fit<S>(&self, y: &[T], n: usize) -> S
     where
-        T: ndarray_linalg::Lapack,
         S: FromIterator<T>
     {
         let mut p: Vec<_> = self.rpoly_fit(y, n);
@@ -52,18 +57,14 @@ where
     }
     fn rpoly_fit<S>(&self, y: &[T], n: usize) -> S
     where
-        T: ndarray_linalg::Lapack,
         S: FromIterator<T>
     {
-        use ndarray::ArrayView2;
-        use ndarray_linalg::{Solve, QR};
+        let v: Array2<T> = self.vandermonde_matrix(n + 1);
 
-        let v = self.vandermonde_matrix(n + 1);
-
-        let (q, r) = v.qr()
+        let (q, r) = v.qr_into()
             .unwrap();
-        let qtmy = q.t()
-            .dot(&ArrayView2::from_shape((y.len(), 1), y).unwrap());
+        let q_t = q.t();
+        let qtmy = q_t.dot(&ArrayView2::from_shape((y.len(), 1), y).unwrap());
         let p = r.solve(&qtmy.column(0))
             .unwrap();
 
